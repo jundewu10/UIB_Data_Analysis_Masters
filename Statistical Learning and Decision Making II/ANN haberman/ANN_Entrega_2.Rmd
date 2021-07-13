@@ -1,0 +1,325 @@
+---
+title: "Artificial Neural Network 2"
+author: "Jun De Wu"
+date: "21/03/2021"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  pdf_document:
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+linkcolor: red
+header-includes: \renewcommand{\contentsname}{Contenidos}
+citecolor: purple
+toccolor: blue
+urlcolor: blue
+---
+
+# Exercise 1
+
+The last project we told about the neural network architecture and the gradient descent method as a method to find the minimum of the cost function. When we do not have hidden layers it is easy to apply this method, but in cases that we do have hidden layers things work a bit different. We know what is the desired value of each observation and we construct the cost function, but we do not know what hidden neurons outputs from hidden layers should be worth. 
+
+In normal neural networks there are usually hidden layers with hidden neurons, making difficult to update weights and biases from these hidden layers. The method used is called Backpropagation. Before we explain how does it work, it is essential to give a basic idea of the process. Given the cost function, we want to update weights and biases from every layers and as we said before, it is not easy because we do not have the desired value of the hidden neurons outputs. But we do know what parameters or variables affects to the cost function: the weights and the biases.
+
+Calculating the derivatives of the cost function respect the weights and the biases give us how sensitive is the cost function to changes in weights and biases. Without delving into the mathematical foundations behind this process, the main goal is to find a way to update the hidden weights and biases so we can transmit the uploading backward.  
+
+# Exercise 2
+
+```{r, warning=FALSE, message=FALSE}
+require(tidyverse)
+require(neuralnet)
+require(GGally)
+require(ggcorrplot)
+require(caTools)
+require(caret)
+```
+
+First of all, we load the data set that contains cases from a 1958 and 1970 study conducted at the University of Chicago’s Billings Hospital on the survival of 306 patients who had undergone surgery for breast cancer.
+
+```{r, warning=FALSE,message=FALSE}
+haberman <- read_csv("haberman.data", col_names = FALSE)
+glimpse(haberman)
+```
+
+The data set contains 4 variables and 306 observations. We are going to make a little description of the variables: 
+
+* `X1`: Age of patient at time of operation.
+
+* `X2`: Patient's year of operation.
+
+* `X3`: Number of positive axillary nodes detected.
+
+* `X4`: Survival status. It is worth 0 if the patient survived 5 years or longer and it is worth 1 if the patient died within 5 year.
+
+The variable we have to predict is `X4`, which corresponds to Survival Status. The main idea is make it work with Artificial Neural Network, but before that we are going to make a Descriptive Analysis (even though we have only 4 variables). As we can notice, the variable `X4` takes value 1 or 2 and it is not usual. In order to avoid future possible problems, we are going to change the values into 0 or 1 instead 1 or 2. We will also change the variable's name to identify them better.
+
+```{r}
+haberman <- haberman %>%
+  mutate(Survival_factor = as.factor(recode(X4, "1" = 0, "2" = 1)),  
+         X4 = recode(X4, "1" = 0, "2" = 1)) %>%
+  rename(Age_of_Patient = X1 , Year_of_Operation = X2, Positive_Axiliary = X3, Survival_Status = X4)
+
+```
+
+It is important to check if there are NA values.
+
+```{r}
+anyNA(haberman)
+```
+
+Hopefully, there is no NA value so we can continue with the analysis. The next step is to plot the variable two by two and their correlations. For this task we will use the function `ggpairs` from the package `GGally`.
+
+```{r, message=FALSE}
+ggpairs(haberman, mapping = aes(color = Survival_factor), 
+                      columns = c('Age_of_Patient', 'Year_of_Operation', 
+                                  'Positive_Axiliary', 'Survival_factor'), 
+                      columnLabels = c('Age of Patient', 'Year of Operation', 
+                                       'Positive Axiliary', 'Survival Status')) 
+```
+
+This graphic shows us that we can not find a hyperplane to separate the points between the two labels, the points are not linearly separable. There is no large correlations between the variables either, so we will not remove any variable. 
+
+Once we have done this little descriptive analysis, we should not forget to normalize or standardize the variables in order to get better results. We will use the max-min normalization and `scale` function to standardize. 
+
+```{r}
+normalize <- function(x)
+  {
+    return((x- min(x)) /(max(x)-min(x)))
+  }
+
+haberman_norm <- as.data.frame(sapply(haberman[,-5], normalize))
+haberman_stan <- data.frame(scale(haberman[,-c(4,5)]), "Survival_Status" = haberman$Survival_Status)
+haberman <- haberman[,-5]
+```
+
+As we know, the next step is to separate the data set in a training set and a testing set. We will use the training set to train our Artificial Neural Network model and the testing set to predict and calculate the accuracy or type I and II errors. As variable `Survival_Status` means survival status, we want to minimize the type II error (False negative). 
+
+```{r}
+set.seed(284)
+split <- sample.split(haberman$Survival_Status, SplitRatio = 0.8)
+split_norm <- sample.split(haberman_norm$Survival_Status, SplitRatio = 0.8)
+split_stan <- sample.split(haberman_stan$Survival_Status, SplitRatio = 0.8)
+
+training_set <- subset(haberman, split == TRUE)
+testing_set <- subset(haberman_norm, split == FALSE)
+training_set_norm <- subset(haberman_norm, split_norm == TRUE)
+testing_set_norm <- subset(haberman_norm, split_norm == FALSE)
+training_set_stan <- subset(haberman_stan, split_stan == TRUE)
+testing_set_stan <- subset(haberman_stan, split_stan == FALSE)
+```
+
+Finally we can make an ANN model to try to predict our variable `Survival_Status`, that is Survival Status. We will start with our data without normalization and standardization. Theoretically using the original dataset it is worst than normalized or standardized dataset.
+
+We are not going to tune the starting weights and the number of epochs because it does not change the results and sometimes the model works worst. We use the sum of squared errors as the error measure and the logistic (sigmoid) function as activation function, and the algorithm used to calculate the neural network is Backpropagation.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set, 
+                 hidden = c(1,2), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 1,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, testing_set[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set$Survival_Status)
+cm
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set, 
+                 hidden = c(2,2), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.01,
+                 act.fct = "logistic",)
+
+ANN_pred <- round(compute(ANN, testing_set[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set$Survival_Status)
+cm
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set, 
+                 hidden = c(1), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.001,
+                 act.fct = "logistic",)
+
+ANN_pred <- round(compute(ANN, testing_set[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set$Survival_Status)
+cm
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+First of all, the models with the original dataset are a mess because they classify all the observations as 0. We obtain similar error with different learning rate because this hyperparameter only affects the number of steps.
+
+We will continue with the normalized dataset and it is supposed to be better. Both in this case and with stanrdadized dataset, we are not going to consider starting weights and the number of epochs because they are not relevant in the model, sometimes they only make things worse. Let's start with two hidden layers with 1 and 2 neurons respectively and 0.1 as learning rate.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set_norm, 
+                 hidden = c(1,2), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.1,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, testing_set_norm[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set_norm$Survival_Status)
+cm
+cat(sprintf("Accuracy achieved: %f", ((cm[1,1] + cm[2,2])/(cm[1,1] + cm[1,2] + cm[2,1] + cm[2,2]))))
+```
+
+```{r}
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+We obtain a smaller error than the other case, and also the model classifies with more or less 80% of accuracy. There are 11 false negatives and only 1 false positive. Our goal, in addition to improving accuracy, is to minimize type II error because it means that we classify people who are going to die within 5 year into people who are going to survive more than 5 years. Let's try changing and addind 2 hidden layers with 2 neurons each one and decreasing the learning rate to 0.01.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set_norm, 
+                 hidden = c(2,2), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.01,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, testing_set_norm[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set_norm$Survival_Status)
+cm
+cat(sprintf("Accuracy achieved: %f", ((cm[1,1] + cm[2,2])/(cm[1,1] + cm[1,2] + cm[2,1] + cm[2,2]))))
+```
+
+```{r}
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+With this combination we obtain a lower error and a better accuracy: almost 82%. The most important part is that we have reduced in 1 unit the type II error, improving this part in contrast with the first case.
+
+Let learning rate be 0.01 because a smaller one just make the model harder to compute and sometimes it does not converge. Now, we only put 1 hidden layer with 5 neurons. 
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set_norm, 
+                 hidden = c(5), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.01,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, testing_set_norm[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set_norm$Survival_Status)
+cm
+cat(sprintf("Accuracy achieved: %f", ((cm[1,1] + cm[2,2])/(cm[1,1] + cm[1,2] + cm[2,1] + cm[2,2]))))
+```
+
+```{r}
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+ 
+There is something interesting in this case. We obtain a lower error, but we also get a lower accuracy. The reason that makes this model better than the previous one is because the number of false negatives is lower, so even though the accuracy is not as well as we would like to, the false negatives are better than the other case.
+
+It is time to change the dataset and train the models with standardized dataset. Just as an observation, the values of the standardized dataset are not only in the interval $[0,1]$, now they can take negative values.
+
+Let's start with the 2 hidden layers and 2 and 1 neurons respectively, with 0.01 as learning rate.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set_stan, 
+                 hidden = c(2,1), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.01,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, testing_set_stan[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set_stan$Survival_Status)
+cm
+cat(sprintf("Accuracy achieved: %f", ((cm[1,1] + cm[2,2])/(cm[1,1] + cm[1,2] + cm[2,1] + cm[2,2]))))
+```
+
+```{r}
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+The obtained error is not bad and apparently the accuracy is worst than models with normalized dataset, but if we are focused in the type II error there are 10 false negatives, not mucho different than the other cases.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set_stan, 
+                 hidden = c(3,2), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.01,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, testing_set_stan[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set_stan$Survival_Status)
+cm
+cat(sprintf("Accuracy achieved: %f", ((cm[1,1] + cm[2,2])/(cm[1,1] + cm[1,2] + cm[2,1] + cm[2,2]))))
+```
+
+```{r}
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+Adding more neuron in each hidden layer make thins worse, we get worst accuracy and false negatives. The only positive thing is that the error is lower.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(Survival_Status ~. , data = training_set_stan, 
+                 hidden = c(3,3), 
+                 err.fct="sse",
+                 linear.output=FALSE, 
+                 algorithm="backprop",
+                 learningrate = 0.01,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, testing_set_stan[, -4])$net.result)
+
+cm <- table(ANN_pred, testing_set_stan$Survival_Status)
+cm
+cat(sprintf("Accuracy achieved: %f", ((cm[1,1] + cm[2,2])/(cm[1,1] + cm[1,2] + cm[2,1] + cm[2,2]))))
+```
+
+```{r}
+cat(sprintf("Error achieved: %f", ANN$result.matrix[1]))
+```
+
+With 2 hidden layers and 3 neurons in each one we obtain the lowest error and the lowest number of false negatives, even the accuracy is not as good as we would have liked. 
+
+After done all these models, it is a hard work to compare them. Let's remember which are the best model in each case. 
+
+* Original Dataset: 2 hidden layer with 2 neurons each one and 0.01 learning rate obtaining an error of 23.88.
+
+* Normalized Dataset: 1 hidden layer with 5 neurons and 0.01 learning rate obtaining an error of 18.674 and an accuracy of 77% (9 false negatives).
+
+* Standardized Dataset: 2 hidden layers with 3 neurons each one and 0.01 learning rate obtaining an error of 17.358 and an accuracy of 65.57% (8 false negatives).
+
+As the dataset is related to medical issues and patiens with cancer, we must prioritize the number of false negatives and take the model with the lower number. So in conclusion, we choose the model with standardized dataset because it is the one which minimize the number of false negatives.

@@ -1,0 +1,1074 @@
+---
+title: "Trabajo final: Credit Card Customer"
+author: "Jun De Wu"
+date: "15/02/2021"
+output:
+  pdf_document:
+    toc: yes
+    number_sections: yes
+  html_document:
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+linkcolor: red
+header-includes: \renewcommand{\contentsname}{Contenidos}
+citecolor: purple
+toccolor: blue
+urlcolor: blue
+---
+
+# Contexto del problema y modelo de datos.
+
+En esta primera parte nos centraremos en introducir nuestro data set y explicar las variables, limpiar nuestros datos y hacer un análisis breve del tipo de dato que mejor se ajusta a cada variable. En este caso, se ha escogido un data set sobre clientes de tarjetas de crédito (consulta en https://www.kaggle.com/sakshigoyal7/credit-card-customers) y el fichero que cargaremos se llama "BankChurners.csv". 
+
+El conjunto de datos nos proporciona información sobre los clientes de un banco que más abajo procederemos a explicar cada variable. El objetivo más interesante en este conjunto de datos es predecir qué clientes van a dar de baja los servicios del banco, de esta forma el banco puede ponerse en contacto con ellos para hacer cambiar su decisión. Tenemos información cualitativa como la edad, el nivel de educación, ingresos anuales, etc, y también tenemos información cuantitativa como son el límite de crédito en la tarjeta, cantidad total de transacción, etc. 
+
+Para empezar, vamos a proceder con la carga de datos.
+
+```{r, message=FALSE}
+require(tidyverse)
+require(patchwork)
+require(ggpubr)
+require(ggcorrplot)
+require(modeest)
+require(fastDummies)
+require(caTools)
+require(MLmetrics)
+require(e1071)
+require(caret)
+require(cluster)
+require(devtools)
+require(ElemStatLearn)
+require(ROSE)
+require(class)
+require(rpart)
+require(rpart.plot)
+```
+
+```{r, message=FALSE}
+bank <- read_csv("BankChurners.csv")
+```
+
+Vamos a quitar la primera variable `CLIENTNUM` y las dos últimas ya que no son de utilidad en nuestro estudio. 
+```{r}
+bank <- bank %>%
+  dplyr::select(-c("CLIENTNUM","Naive_Bayes_Classifier_Attrition_Flag_Card_Category_Contacts_Count_12_mon_Dependent_count_Education_Level_Months_Inactive_12_mon_1","Naive_Bayes_Classifier_Attrition_Flag_Card_Category_Contacts_Count_12_mon_Dependent_count_Education_Level_Months_Inactive_12_mon_2"))
+glimpse(bank)
+```
+
+Antes de detallar las variables, vamos a comprobar si nuestro conjunto de datos contiene elementos NA.
+```{r}
+anyNA(bank)
+```
+
+Por suerte, no tenemos NA's en nuestro data set. A continuación vamos a ver las variables que tenemos:
+
+* `Attrition_Flag`: Actividad del cliente.
+* `Customer_Age`: Edad de los clientes en años.
+* `Gender`: Género del cliente.
+* `Dependent_count`: Número de dependientes.
+* `Education_Level`: Nivel de educación.
+* `Marital_Status`: Estado civil.
+* `Income_Category`: Ingreso anual.
+* `Card_Category`: Tipo de producto.
+* `Months_on_book`: Periodo de relación con el banco.
+* `Total_Relationship_Count`: Número total de productos manejados por el cliente.
+* `Months_Inactive_12_mon`: Número de meses inactivos en los últimos 12 meses.
+* `Contacts_Count_12_mon`: Número de contactos en los últimos 12 meses.
+* `Credit_Limit`: Límite de crédito en la tarjeta.
+* `Total_Revolving_Bal`: Saldo renovable total en la tarjeta de crédito.
+* `Avg_Open_To_Buy`: Disposición a comprar línea de crédito (Promedio de los últimos 12 meses).
+* `Total_Amt_Chng_Q4_Q1`: Cambio en la cantidad de transacción.
+* `Total_Trans_Amt`: Cantidad total de transacción.
+* `Total_Trans_Ct`: Recuento total de transacciones.
+* `Total_Ct_Chng_Q4_Q1`: Cambio en el recuento de transacciones.
+* `Avg_Utilization_Ratio`: Índice de utilización promedio de la tarjeta.
+
+
+En total hay 10,127 observaciones y 20 variables. Como nos indica en la tabla de arriba, tenemos 6 variables cualitativas (en forma de character) y son `Attrition_Flag`, `Gender`, `Education_Level`, `Marital_Status`, `Income_Category` y `Card_Category`; por otra parte tenemos 14 variables cuantitativas (numéricas) compuestas por el resto de variables. 
+
+* Las variables cualitativas son todas categóricas, con lo cual nos interesa cambiar su tipo de character a factor. 
+* Las variables cuantitativas que tenemos son del tipo numérico, siendo correcta esta asignación, pero hay algunas variables que las pasamos a integer ya que son valores enteros. Estas variables son: `Customer_Age`, `Dependent_count`, `Months_on_book`, `Total_Relationship_Count`, `Months_Inactive_12_mon`, `Contacts_Count_12_mon`, `Total_Trans_Amt` y `Total_Trans_Ct`.
+
+Vamos a cambiar el tipo de dato de las variables cualitativas, pasaremos de tener variables del tipo character a tipo factor; las variables cuantitativas que mencionamos anteriormente también serán cambiadas a tipo integer. 
+```{r}
+bank <- bank %>%
+  mutate(Attrition_Flag = factor(Attrition_Flag), Gender = factor(Gender), Education_Level =
+           factor(Education_Level, levels = c("Unknown", "Uneducated","High School", 
+                                              "College", "Graduate", "Post-Graduate", 
+                                              "Doctorate")), Marital_Status =
+           factor(Marital_Status), Income_Category = factor(Income_Category, 
+                                                            c("Unknown", "Less than $40K",
+                                                              "$40K - $60K", "$60K - $80K",
+                                                              "$80K - $120K", "$120K +")),
+         Card_Category = factor(Card_Category), Customer_Age = as.integer(Customer_Age),
+         Dependent_count = as.integer(Dependent_count), Months_on_book = 
+           as.integer(Months_on_book), Total_Relationship_Count =
+           as.integer(Total_Relationship_Count), Months_Inactive_12_mon = 
+           as.integer(Months_Inactive_12_mon), Contacts_Count_12_mon = 
+           as.integer(Contacts_Count_12_mon), Total_Trans_Amt = 
+           as.integer(Total_Trans_Amt), Total_Trans_Ct = as.integer(Total_Trans_Ct))
+```
+
+A continuación vamos a validar de que nuestras variables para ver que todos los valores son correctos y están dentro del rango correspondiente.
+
+```{r}
+tabla_rangos = data.frame(table(bank$Attrition_Flag == "Attrited Customer" |
+        bank$Attrition_Flag == "Existing Customer"), table(bank$Customer_Age > 0),
+        table(bank$Gender == "F" | bank$Gender == "M"), table(bank$Dependent_count >= 0),
+        table(bank$Education_Level == "Unknown" | bank$Education_Level == "Uneducated"
+      | bank$Education_Level == "High School" | bank$Education_Level == "College" |
+        bank$Education_Level == "Graduate" | bank$Education_Level == "Post-Graduate"
+      | bank$Education_Level == "Doctorate"), 
+      table(bank$Marital_Status == "Unknown" | bank$Marital_Status == "Married"
+      | bank$Marital_Status == "Single" | bank$Marital_Status == "Divorced"),
+      table(bank$Income_Category == "Unknown" | bank$Income_Category == "Less than $40K"
+      | bank$Income_Category == "$40K - $60K" | bank$Income_Category == "$60K - $80K" |
+        bank$Income_Category == "$80K - $120K" | bank$Income_Category == "$120K +"),
+      table(bank$Card_Category == "Blue" | bank$Card_Category == "Gold"
+      | bank$Card_Category == "Silver" | bank$Card_Category == "Platinum"),
+      table(bank$Months_on_book > 0), table(bank$Total_Relationship_Count > 0),
+      table(bank$Months_Inactive_12_mon >= 0 & bank$Months_Inactive_12_mon <= 12),
+      table(bank$Contacts_Count_12_mon >= 0), table(bank$Credit_Limit >= 0),
+      table(bank$Total_Revolving_Bal >= 0), table(bank$Avg_Open_To_Buy >= 0),
+      table(bank$Total_Amt_Chng_Q4_Q1 >= 0), table(bank$Total_Trans_Amt >= 0),
+      table(bank$Total_Trans_Ct >= 0), table(bank$Total_Ct_Chng_Q4_Q1 >= 0),
+      table(bank$Avg_Utilization_Ratio >= 0)
+)
+
+glimpse(tabla_rangos[,sapply(tabla_rangos, is.numeric)])
+```
+
+Los valores numéricos nos indican las observaciones que cumplen con las condiciones que hemos aplicado. Vemos que todos los valores son igual al número total de observaciones que tenemos en el data set, con lo cual todas las variables están dentro de los rangos correspondientes, por lo que no tenemos observaciones atípicas. 
+
+# Análisis Exploratorio (EDA)
+
+## Variables cualitativas
+
+Vamos a empezar el análisis exploratorio con las variables cualitativas. Recordamos que tenemos `Attrition_Flag`, `Gender`, `Education_Level`, `Marital_Status`, `Income_Category` y `Card_Category`. Para empezar veamos la cantidad de clientes que siguen en el banco y la que se ha dado de baja.
+
+```{r, fig.align = "center", fig.width=6, fig.height=2}
+bank %>%
+  ggplot(aes(x = Attrition_Flag, label = scales::percent(prop.table(stat(count))))) + 
+  geom_bar(fill = c("skyblue4", "forestgreen"), alpha = 0.8) + 
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5,
+              hjust = -0.08,
+              size = 2) +
+  labs(x = "Tipo de cliente", y = "Frecuencia", title = "Estado de la cuenta") +
+  coord_flip() + 
+  theme_classic()
+```
+
+El 16% de los clientes que tenemos que como observación se han dado de baja, mientras que el 84% siguen manteniendo la cuenta en el banco. En términos generales, hay pocos clientes que han prescindido de los servicios de la empresa, pero en términos relativos sigue siendo un porcentaje significativo que el banco puede estar interesado en intentar analizar las razones de su baja. A continuación analizamos las otras variables cualitativas para ver su influencia sobre la variable `Attrition_Flag`. Realizaremos contrastes de independencia entre `Attrition_Flag` y las otras variables cualitativas utilizando el test $\chi^2$ de independencia. El contraste de independencia sirve para ver si dos criterios, $X$ y $Y$ para clasificar una población $n$ son independientes entre ellos o no, obteniendo el siguiente contraste:
+
+$$ 
+\left\{
+\begin{array}{lcc}
+H_0: \mbox{Los criterios de clasificación X e Y son independientes} \\
+\\H_1: \mbox{Los criterios de clasificación X e Y no son independientes}
+\end{array}
+\right. 
+$$
+
+A modo de ejemplo, vemos cómo se realiza el contraste para `Attrition_Flag` y `Gender`, los otros se hacen de forma parecida. De esta forma, nuestro contraste a realizar es el siguiente: 
+
+$$
+\left\{
+\begin{array}{lcc}
+H_0: \mbox{Los criterios de clasificación Attrition Flag y Gender son independientes} \\
+\\H_1: \mbox{Los criterios de clasificación Attrition Flag y Gender no son independientes}
+\end{array}
+\right.
+$$
+
+Empezamos creando la tabla de contingencia que nos da la relación entre estas dos variables.
+
+```{r}
+tabla_contingencia_gender <- table(bank$Attrition_Flag, bank$Gender)
+tabla_contingencia_gender
+```
+
+A partir de esta, creamos las frecuencias marginales:
+
+```{r}
+tabla_marginal_gender <- addmargins(tabla_contingencia_gender)
+tabla_marginal_gender
+```
+
+También tenemos que crear la tabla de las frecuencias esperadas ya que nos tenemos que asegurar que ningún valor de la tabla sea menor que 5 para poder realizar correctamente el test $\chi^2$.
+
+```{r}
+tabla_frec_esperadas_gender <-
+  rowSums(tabla_contingencia_gender)%*%t(colSums(tabla_contingencia_gender))/sum(tabla_contingencia_gender)
+tabla_frec_esperadas_gender
+```
+
+Ningún valor es menor que 5, con lo cual podemos proceder con el test.
+
+```{r}
+chisq.test(tabla_contingencia_gender)
+```
+
+El p-valor es suficientemente pequeño para rechazar la hipótesis nula y concluimos que el tipo de cliente y su edad no son independientes.
+
+Para las otras variables cualitativas hacemos el mismo contraste con respecto a `Attrition_Flag`.
+
+**`Education_Level`**:
+
+```{r}
+tabla_contingencia_education <- table(bank$Attrition_Flag, bank$Education_Level)
+tabla_marginal_education <- addmargins(tabla_contingencia_education)
+tabla_frec_esperadas_education <-
+  rowSums(tabla_contingencia_education)%*%t(colSums(tabla_contingencia_education))/sum(tabla_contingencia_education)
+tabla_frec_esperadas_education
+chisq.test(tabla_contingencia_education)
+```
+
+Con un nivel de significación $\alpha = 5\%$ aceptamos la hipótesis nula, `Education_Level` y `Attrition_Flag` son independientes.
+
+**`Marital_Status`**:
+
+```{r}
+tabla_contingencia_marital <- table(bank$Attrition_Flag, bank$Marital_Status)
+tabla_marginal_marital <- addmargins(tabla_contingencia_marital)
+tabla_frec_esperadas_marital <-
+  rowSums(tabla_contingencia_marital)%*%t(colSums(tabla_contingencia_marital))/sum(tabla_contingencia_marital)
+tabla_frec_esperadas_marital
+chisq.test(tabla_contingencia_marital)
+```
+
+Con un nivel de significación $\alpha = 5\%$ aceptamos la hipótesis nula, `Marital_Status` y `Attrition_Flag` son independientes.
+
+**`Income_Category`**:
+
+```{r}
+tabla_contingencia_income <- table(bank$Attrition_Flag, bank$Income_Category)
+tabla_marginal_income <- addmargins(tabla_contingencia_income)
+tabla_frec_esperadas_income <-
+  rowSums(tabla_contingencia_income)%*%t(colSums(tabla_contingencia_income))/sum(tabla_contingencia_income)
+tabla_frec_esperadas_income
+chisq.test(tabla_contingencia_income)
+```
+
+Con un nivel de significación $\alpha = 5\%$ rechazamos la hipótesis nula, `Income_Category` y `Attrition_Flag` no son independientes.
+
+**`Card_Category`**
+
+```{r}
+tabla_contingencia_card <- table(bank$Attrition_Flag, bank$Card_Category)
+tabla_marginal_card <- addmargins(tabla_contingencia_card)
+tabla_frec_esperadas_card <-
+  rowSums(tabla_contingencia_card)%*%t(colSums(tabla_contingencia_card))/sum(tabla_contingencia_card)
+tabla_frec_esperadas_card
+chisq.test(tabla_contingencia_card)
+```
+
+Tenemos una frecuencia esperada de la tabla menor que 5, el test $\chi^2$ aproxima de forma incorrecta. Para arreglar esto, simularemos el valor del p-valor con 5000 replicaciones. 
+
+```{r}
+set.seed(NULL)
+chisq.test(tabla_contingencia_card,simulate.p.value = TRUE, B=5000)
+```
+
+El p-valor es suficientemente grande como para aceptar la hipótesis nula, `Attrition_Flag` y `Card_Category` son independientes.
+
+Después de realizar todos estos contrastes hemos extraído que las variables que no son independientes de `Attrition_Flag` son `Gender` e `Income_Category`. Cogeremos estas dos variables para realizar un análisis sobre su relación con la variable del tipo de cliente.
+
+```{r, fig.align="center", fig.height=4, fig.width = 7, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = Income_Category, fill = Attrition_Flag, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Tipo de cliente", values = c("Attrited Customer" = "skyblue4",
+                                         "Existing Customer" = "forestgreen")) +
+  labs(x = "Ingreso Anual", y = "Frecuencia", title = "Ingreso del cliente") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+```{r, fig.align="center", fig.height=4, fig.width=7 ,message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = Gender, fill = Attrition_Flag, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5,
+              size = 3) +
+  scale_fill_manual("Tipo de cliente", values = c("Attrited Customer" = "skyblue4",
+                                         "Existing Customer" = "forestgreen")) +
+  labs(x = "Género", y = "Frecuencia", title = "Género del cliente") + 
+  theme_classic()
+```
+
+Los clientes que más abundan son los de ingresos menores que 40,000$, siendo también la categoría con más bajas con un 6.043%. A nivel global, hay pocos que clientes que se dan de baja con otro tipo de ingreso. Respecto al género del cliente, vemos que un 52.9% de los clientes son mujeres mientras que el otro 47.1% son hombres. Hay un mayor número de clientes mujeres que abandonan los servicios del banco (9.2% frente a un 6.9%), aunque las diferencias entre los dos géneros son insignificantes a simple vista. 
+
+Realizamos un análisis visual de la relación entre el ingreso y el género del cliente con respecto a la anulación del servicio de tarjetas con un geom_jitter. 
+
+```{r, fig.align="center", fig.width=10, fig.height=5}
+bank %>%
+  ggplot(aes(x = Income_Category, y = Attrition_Flag)) + 
+  geom_jitter(aes(color = Gender), alpha = 0.8) +
+  scale_color_manual("Género", values = c("F" = "red4", "M" = "blue4")) +
+  labs(x = "Ingreso", y = "Tipo de cliente", title = "Relación Ingreso-Género")  + 
+  theme_linedraw() + 
+  scale_x_discrete(guide = guide_axis(angle = 45))
+```
+
+Se puede observar que hay una clara diferenciación en los ingresos entre las mujeres y los hombres. Parece ser que el 100% de las mujeres se sitúan en ingresos menores de 60,000\$ anuales mientras que todos los clientes que tienen ingresos "mayores" son hombres. En el grupo de ingresos con mayor abandono de los servicios se sitúa en los ingresos 40,000\$, siendo en su mayoría mujeres.   
+
+## Variables cuantitativas
+
+En total hay 14 variables cuantitativas y no vamos a realizar un análisis exhaustivo de cada una, con lo cual vamos a elegir las que consideremos que son las más importantes en relación a la fuga de clientes. Para ello, vamos a graficar la matriz de correlación de las variables cuantitativas junto con `Attrition_Flag`, pero antes tenemos que pasar esta variable a numérica.
+
+```{r, fig.align="center", fig.height=5, fig.width=7 ,message=FALSE, warning=FALSE}
+bank_correlacion <- bank %>%
+  mutate(Attrition_Flag = as.integer(recode(Attrition_Flag, "Existing Customer" = 0,
+                                 "Attrited Customer" = 1)))
+
+correlacion <- cor(bank_correlacion[, sapply(bank_correlacion, is.numeric)], 
+                   method = "spearman")
+
+ggcorrplot(correlacion, lab = TRUE, lab_size = 1.7, legend.title = "Correlación", 
+           lab_col = "blue4", colors = c("yellow4", "white", "green4")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(x = "", y = "", title = "Matriz de correlación")
+```
+
+Primero observamos que las variables `Avg_Open_To_Buy` y `Credit_Limit` tienen correlación 0.93, `Total_Trans_Ct` y `Total_Trans_Amt` tienen correlación 0.88, `Total_Revolving_Bal` y `Avg_Utilization_Ratio` tienen correlación 0.71 y `Customer_Age` y `Months_on_book` tienen correlación 0.77, con lo cual estas variables tienen correlación perfecta y lo tendremos en cuenta a la hora de realizar los modelos ya que tendremos que eliminar una de ellas en cada caso. En lo que respecta a `Attrition_Flag`, no hay grandes correlaciones pero las 4 más significativas son con `Total_Revolving_Bal` (Saldo renovable total en la tarjeta de crédito), `Total_Trans_Ct` (Recuento total de transacciones), `Total_Ct_Chng_Q4_Q1` (Cambio en el recuento de transacciones) y `Avg_Utilization_Ratio` (Índice de utilización promedio de la tarjeta).
+
+Estas variables serán las que analizaremos mediante gráficos. Dibujaremos un histograma de cada variable para ilustrar mejor la distribución de éstas respecto al tipo de cliente.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, warning = FALSE, message = FALSE}
+p1 <- bank %>%
+  ggplot(aes(x = Total_Revolving_Bal, fill = Attrition_Flag)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Tipo de cliente", values = c("Attrited Customer" = "gold4",
+                                           "Existing Customer" = "red4")) +
+  labs(x = "Saldo renovable total", y = "Frecuencia", 
+       title = "Distribución del saldo renovable total") +
+  theme_classic()
+  
+
+p2 <- bank %>%
+  ggplot(aes(x = Total_Trans_Ct, fill = Attrition_Flag)) + 
+  geom_histogram(position = "dodge", alpha = 0.8)  + 
+  scale_fill_manual("Tipo de cliente", values = c("Attrited Customer" = "gold4",
+                                           "Existing Customer" = "red4")) +
+  labs(x = "Transacciones totales", y = "Frecuencia",
+       title = "Distribución de las transacciones totales") + 
+  theme_classic()
+
+ggarrange(p1, p2, nrow = 2, ncol = 1)
+```
+
+En el histograma de `Total_Revolving_Bal` hay una gran cantidad de clientes que tienen un saldo renovable bajo, apilándose muchos de ellos en 0 saldo renovable total. Además, se puede apreciar cómo los clientes que se han dado de baja tienen un saldo renovable total muy bajo a lo largo de todo el histograma, como una posible condición de aquellos que abandonan el banco. En lo que se refiere a las transacciones totales, se aprecia claramente que los clientes que se dan de baja realizan muchísimas menos transacciones que los clientes que siguen en el banco. 
+
+```{r, fig.align="center", fig.width=7, fig.height=4, warning = FALSE, message = FALSE}
+p3 <- bank %>%
+  ggplot(aes(x = Total_Ct_Chng_Q4_Q1, fill = Attrition_Flag)) + 
+  geom_histogram(position = "dodge", alpha = 0.8)  + 
+  scale_fill_manual("Tipo de cliente", values = c("Attrited Customer" = "gold4",
+                                           "Existing Customer" = "red4")) +
+  labs(x = "Cambio en las transacciones", y = "Frecuencia", 
+       title = "Distribución del cambio en las transacciones") + 
+  theme_classic()
+
+p4 <- bank %>%
+  ggplot(aes(x = Avg_Utilization_Ratio, fill = Attrition_Flag)) + 
+  geom_histogram(position = "dodge", alpha = 0.8)  + 
+  scale_fill_manual("Tipo de cliente", values = c("Attrited Customer" = "gold4",
+                                           "Existing Customer" = "red4")) +
+  labs(x = "Uso promedio de la tarjeta", y = "Frecuencia", 
+       title = "Distribución del uso promedio de la tarjeta") + 
+  theme_classic()
+
+ggarrange(p3, p4, nrow = 2, ncol = 1)
+```
+
+El cambio en las transacciones sigue predominando los clientes que siguen, con un bajo aporte del resto. En el uso promedio de la tarjeta sigue un poco como el saldo renovable total, clara dominancia de los clientes fieles y en consecuencia, más uso de las tarjetas de éstos respecto a los que se van. 
+
+## Variables cualitativas vs Variables cuantitativas
+
+Una vez que hayamos escogido las variables cualitativas y cuantitativas más influyentes sobre nuestra variable `Attrition_Flag`, es hora de ver el comportamiento de éstos de forma conjunta. Para ello, vamos a comparar las variables cualitativas que hemos escogido anteriormente con las variables cuantitativas que más correlación tienen con `Attrition_Flag`. Utilizamos diagramas de violín con su correspondiente diagrama de caja dentro, siempre separándolos entre las dos categorías de `Attrition_Flag`, añadiendo además la media de cada nivel de las variables cualitativas respecto a la variable cuantitativa que estamos estudiando. Después de graficar estos diagramas, realizaremos un ANOVA de un factor para determinar si las medias de las variables cuantitativas para cada categoría de las variables cualitativas son iguales.
+
+Empezaremos con la variable de saldo renovable total respecto al ingreso:
+
+```{r, fig.align="center", fig.width=8, fig.height=4, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = Income_Category, y = Total_Revolving_Bal, color = Income_Category)) + 
+  geom_violin(fill = "gray87") +
+  geom_boxplot(width = 0.1, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 1.5, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Ingreso", values = 
+                       c("green4", "blue4", "red4","yellow4","darkorange4","grey4")) +
+  theme_linedraw() +
+  labs(x = "", y = "Saldo renovable total") +
+  facet_wrap(~Attrition_Flag) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Los clientes que se van tienen claramente un saldo renovable menor que los que se quedan. A excepción de los clientes que se van con ingreso entre 80,000 y 120,000 dólarex, el resto tienen las medianas y las medias parecidas. De forma más homógenea se comportan las medias y las medianas para los clientes que se quedan.
+
+Seguimos con los diagramas del saldo renovable respecto al sexo del cliente:
+
+```{r, fig.align="center", fig.width=8, fig.height=4, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = Gender, y = Total_Revolving_Bal, color = Gender)) + 
+  geom_violin(fill = "gray87") +
+  geom_boxplot(width = 0.1, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 1.5, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Género del cliente", values = c("blue4", "gold4")) +
+  theme_linedraw() +
+  labs(x = "", y = "Saldo renovable total") +
+  facet_wrap(~Attrition_Flag)
+```
+
+El comportamiento del saldo renovable entre las mujeres y los hombres son prácticamente idénticas, sin ninguna diferencia clara. 
+
+Continuamos con las transacciones totales y el ingreso:
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = Income_Category, y = Total_Trans_Ct, color = Income_Category)) + 
+  geom_violin(fill = "gray87") +
+  geom_boxplot(width = 0.1, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 1.5, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Ingreso", values = 
+                       c("green4", "blue4", "red4","yellow4","darkorange4","grey4")) +
+  theme_linedraw() +
+  facet_wrap(~Attrition_Flag) +
+  labs(x = "Ingreso", y = "Transacciones totales") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+De manera similar que con los casos anteriores, exceptuando la diferencia entre los clientes que se van y los que no, no se aprecia apenas diferencia entre los niveles de ingreso respecto a las transacciones totales. Sí que podemos observar que hay una gran cantidad de outliers en este caso. Esta cantidad de valores atípicos puede ser debido a que el número de transacciones que realizar una persona puede diferir mucho entre usuarios, además de que los clientes con ingresos por debajo de 60,000 dólares tienden a tener más comportamientos atípicas que los otros. 
+
+Por último, tenemos los diagramas entre las transacciones totales y el género:
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = Gender, y = Total_Trans_Ct, color = Gender)) + 
+  geom_violin(fill = "gray87") +
+  geom_boxplot(width = 0.1, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 1.5, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, 
+               color ="red4", show_guide = FALSE) +
+  scale_color_manual("Género del cliente", values = c("blue4", "gold4")) +
+  facet_wrap(~Attrition_Flag) +
+  theme_linedraw() +
+  facet_wrap(~Attrition_Flag) +
+  labs(x = "", y = "Transacciones totales") 
+```
+
+Parece que puede haber una pequeña diferencia entre las medias de las transacciones en cada sexo. Como comentábamos anteriormente, la cantidad de outliers en este caso puede ser debido a la gran diferencia que hay en las transacciones realizadas entre diferentes clientes. En este caso en particular, vemos que los outliers se concentran exclusivamente (exceptuando, como parece indicar los diagramas, uno o dos outliers en los hombres) en las mujeres. No es fácil saber la causa sin entrar en cuestiones sexistas, pero sí que puede haber una mayor variabilidad entre las mujeres en su transacciones totales debido a un mayor uso de las tarjetas. 
+
+Como hemos visto, parece ser que puede haber una diferencia en las medias de `Total_Trans_Ct` en los diferentes niveles de `Income_Category` y `Gender`, vamos a realizar un ANOVA de un factor para realizar el contraste pertinente.
+
+```{r}
+bank_attrited <- bank %>%
+  filter(Attrition_Flag == "Attrited Customer")
+
+bank_existing <- bank %>%
+  filter(Attrition_Flag == "Existing Customer") 
+```
+
+Empezamos a ver si las medias de las transacciones totales para cada nivel de ingreso son iguales o no:
+
+```{r}
+summary(aov(bank_attrited$Total_Trans_Ct~bank_attrited$Income_Category))
+```
+
+Obtenemos un p-valor de 0.077, con lo cual aceptamos con un nivel de significación de $\alpha = 5\%$ la hipótesis nula de que las medias son iguales.
+
+De la misma forma realizamos los otros tests.
+
+```{r}
+summary(aov(bank_existing$Total_Trans_Ct~bank_existing$Income_Category))
+```
+
+```{r}
+summary(aov(bank_attrited$Total_Trans_Ct~bank_attrited$Gender))
+```
+
+```{r}
+summary(aov(bank_existing$Total_Trans_Ct~bank_existing$Gender))
+```
+
+Obtenemos que las medias de las transacciones totales entre las diferentes categorías de `Gender` para los dos tipos de clientes no son iguales; de la misma forma tenemos que las medias de las transacciones totales de los diferentes niveles de ingreso de los clientes que se quedan tampoco son iguales.
+
+## Tablas de estadísticos
+
+Otra de las cosas que podemos hacer es calcular los estadísticos más importantes para las dos variables cuantitativas que hemos utilizado en el apartado del análisis exploratorio respecto a las variables cualitativas `Gender` e `Income_Category`, siempre separando por si el cliente sigue utilizando los servicios del banco o no. Los estadísticos empleados en cada caso son la media, la desviación típica, la mediana y la moda. 
+
+Creamos primero las dos tablas de los estadísticos del saldo renovable total respecto al ingreso y al sexo.
+
+```{r, message = FALSE, warning=FALSE}
+tabla_1 <- bank %>%
+  group_by(Attrition_Flag, Income_Category) %>%
+  summarise(Media = mean(Total_Revolving_Bal), 
+            Desv_tip = sd(Total_Revolving_Bal), 
+            Mediana = median(Total_Revolving_Bal), 
+            Moda = mlv(Total_Revolving_Bal, method = "mfv")[1]) 
+  
+
+table_2 <- bank %>%
+  group_by(Attrition_Flag, Gender) %>%
+  summarise(Media = mean(Total_Revolving_Bal), 
+            Desv_tip = sd(Total_Revolving_Bal), 
+            Mediana = median(Total_Revolving_Bal), 
+            Moda = mlv(Total_Revolving_Bal, method = "mfv")[1])
+```
+
+Viasualizamos la tabla respecto al ingreso, graficando los estadísticos.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+tabla_1
+tabla_1 %>%
+  gather(Estadisticos, Valor, -1, -2) %>%
+  ggplot(aes(x = Income_Category, y = Valor)) +
+  geom_point(aes(color = Estadisticos)) +
+  facet_wrap(~Attrition_Flag) +
+  theme_linedraw() + 
+  scale_color_manual("Estadísticos", values = c("green4", "blue4",
+                                                "red4","yellow4")) +
+  labs(x = "", y = "Estadísticos", title = 
+         "Estadísticos del saldo renovable por ingreso") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Tanto para los clientes que se van como para los que se quedan, la moda es 0 en los diferentes niveles de ingreso. Podemos observar los diferentes estadísticos en ambos casos, pero el hecho más curioso puede ser que las medianas para cada nivel de ingreso en los clientes que se van son 0 exceptuando para los que tienen ingreso entre 80,000 y 120,000 dólares, indicando poco rango de oscilación del saldo renovable total en este grupo. La media es más alta en todas los niveles de ingreso en los que se quedan, de la misma forma que las medianas indicando un mayor rango en esta categoría. 
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+table_2
+table_2 %>%
+  gather(Estadisticos, Valor, -1, -2) %>%
+  ggplot(aes(x = Gender, y = Valor)) +
+  geom_point(aes(color = Estadisticos)) +
+  facet_wrap(~Attrition_Flag) +
+  theme_linedraw() + 
+  scale_color_manual("Estadísticos", values = c("green4", "blue4",
+                                                "red4","yellow4")) +
+  labs(x = "", y = "Estadísticos", title = 
+         "Estadísticos del saldo renovable por género") 
+```
+
+El comportamiento de los estadísticos diferenciando por sexo se comporta igual que el caso anterior.
+
+Realizamos las tablas de estadísticos de las transacciones totales respecto al ingreso y al sexo.
+
+```{r, message=FALSE, warning=FALSE}
+tabla_3 <- bank %>%
+  group_by(Attrition_Flag, Income_Category) %>%
+  summarise(Media = mean(Total_Trans_Ct), 
+            Desv_tip = sd(Total_Trans_Ct), 
+            Mediana = median(Total_Trans_Ct), 
+            Moda = mlv(Total_Trans_Ct, method = "mfv")[1]) 
+
+tabla_4 <- bank %>%
+  group_by(Attrition_Flag, Gender) %>%
+  summarise(Media = mean(Total_Trans_Ct), 
+            Desv_tip = sd(Total_Trans_Ct), 
+            Mediana = median(Total_Trans_Ct), 
+            Moda = mlv(Total_Trans_Ct, method = "mfv")[1])
+```
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+tabla_3
+tabla_3 %>%
+  gather(Estadisticos, Valor, -1, -2) %>%
+  ggplot(aes(x = Income_Category, y = Valor)) +
+  geom_point(aes(color = Estadisticos)) +
+  facet_wrap(~Attrition_Flag) +
+  theme_linedraw() + 
+  scale_color_manual("Estadísticos", values = c("green4", "blue4",
+                                                "red4","yellow4")) +
+  labs(x = "Ingreso", y = "Estadísticos", title = 
+         "Estadísticos de las transacciones totales por ingreso") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Nos damos cuenta que, otra vez, los estadísticos son más alto en los clientes que se quedan. Indica que éste grupo tiene una media de transacciones totales mayor, igual que el rango de oscilación de las transacciones con la mediana. De igual forma, la moda es más alta, con lo cual el número de transacciones con mayor frecuencia para cada nivel de ingreso es casi el doble en el caso de los clientes que se quedan.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+tabla_4
+tabla_4 %>%
+  gather(Estadisticos, Valor, -1, -2) %>%
+  ggplot(aes(x = Gender, y = Valor)) +
+  geom_point(aes(color = Estadisticos)) +
+  facet_wrap(~Attrition_Flag) +
+  theme_linedraw() + 
+  scale_color_manual("Estadísticos", values = c("green4", "blue4",
+                                                "red4","yellow4")) +
+  labs(x = "", y = "Estadísticos", title = 
+         "Estadísticos de las transacciones totales por género") 
+```
+
+El comportamiento es parecido al caso anterior, con una ligera diferencia entre los hombres y las mujeres de los clientes que se quedan.
+
+# Machine Learning
+
+Como explicamos al principio del trabajo, el objetivo todo el estudio que hemos realizado es intentar explicar el comportamiento de los clientes que se quedan y se van (la variable `Attrition_Flag`), con lo cual los algoritmos (aprendizaje supervisado y no supervisado) que implementamos son con ese fin: clasificar los dos grupos de clientes. Al tratarse de una variable cualitativa no podemos realizar métodos de regresión, con lo cual escogeremos la variable `Total_Trans_Ct` (número total de transacciones) para aplicar estos métodos de regresión y predecir la variable en cuestión. 
+
+Para las regresiones utilizaremos dos métodos: la regresión múltiple y el support vector regression (SVR). Para los métodos de clasificación aplicaremos la regresión logística, K-nearest neighbors (KNN), support vector machine (SVM), decision tree, random forest y gradient boosting. 
+
+Además, realizaremos también un análisis de componentes principales (ACP) para reducir la dimensión de nuestro data set a 2 componentes principales, para después aplicar el método de k-means de clustering (aprendizaje no supervisado) y graficar el resultado. Aprovecharemos que habremos reducido las dimensiones de nuestro conjunto de datos para volver a realizar la regresión logística y el support vector machine y de esta forma poder pintar los resultados en el plano.
+
+Empezaremos por pasar nuestras variables cualitativas a numéricas para poder aplicar los modelos, guardando la variable original `Attrition_Flag` como factor ya que la necesitaremos para support vector machine, decision tree, random forest y gradient boosting. 
+
+```{r}
+bank <- bank%>%
+  mutate(Attrition_Flag_1 = ifelse(Attrition_Flag == "Existing Customer", 0, 1),
+         Education_Level = recode(Education_Level, "Unknown" = 0, "Uneducated" = 1, 
+          "High School" = 2, "College" = 3, "Graduate" = 4, "Post-Graduate" = 5, 
+          "Doctorate" = 6), 
+         Income_Category = recode(Income_Category, "Unknown" = 0, "Less than $40K" = 1,
+          "$40K - $60K" = 2, "$60K - $80K" = 3, "$80K - $120K" = 4, "$120K +" = 5), 
+         Gender = recode(Gender, "M" = 1, "F" = 0)) %>%
+  dummy_cols(select_columns = c("Marital_Status", "Card_Category")) %>%
+  dplyr::select(-c("Marital_Status", "Card_Category"))
+```
+
+Separamos nuestro data set en dos conjuntos: el conjunto de entrenamiento y el conjunto de validación. También crearemos estos dos conjuntos escalando las variables cuantitativas, sin incluir las variables numéricas que provienen de una variable factor, para los métodos que usan distancias: el KNN y el support vector machine (SVM).
+
+```{r}
+set.seed(284)
+split <- sample.split(bank$Attrition_Flag, SplitRatio = 0.8)
+bank.train <- subset(bank, split == TRUE)
+bank.train.scale <- bank.train
+bank.train.scale[,c(2,4,7:18)] <- scale(bank.train[,c(2,4,7:18)])
+bank.test <- subset(bank, split == FALSE)
+bank.test.scale <- bank.test
+bank.test.scale[,c(2,4,7:18)] <- scale(bank.test[,c(2,4,7:18)])
+```
+
+## Métodos de regresión
+
+### Regresión lineal múltiple
+
+Recordamos que la regresión lineal múltiple es un método en el cual predecimos una variable dependiente o respuesta (en nuestro caso será `Total_Trans_Ct`) a partir de una combinación lineal de las variables independientes o explicativas. Nuestro data set modificado contiene la variable del tipo de cliente en dos tipos: numérico y factor, con lo que tendremos que excluir la variable de tipo factor como variable explicativa. Además, hemos transformado las variables del estado civil y el tipo de tarjeta en variables ficticias, con lo que tenemos que quitar una de cada tipo para poder realizar la regresión. Excluiremos también la variable `Avg_Open_To_Buy` ya que nos produce valores NA's. 
+
+Entrenamos el modelo de regresión lineal múltiple con nuestro conjunto de entrenamiento.
+
+```{r}
+reg_lineal <- lm(Total_Trans_Ct ~.-Attrition_Flag - 
+                   Marital_Status_Married - Card_Category_Blue - Avg_Open_To_Buy,
+               data = bank.train)
+```
+
+A continuación construiremos un modelo óptimo con el método de la eliminación hacia atrás. 
+
+```{r, results="hide"}
+best_reg <- step(reg_lineal, direction = "backward")
+```
+
+```{r}
+summary(best_reg)
+```
+
+A modo de ejemplo comentamos qué significa el coeficiente de la variable `Total_Revolving_Bal`. El valor del coeficiente que nos da el modelo es -0.002867 y lo interpretamos como: un aumento de una unidad en `Total_Revolving_Bal` hace que la variable `Total_Trans_Ct` baje un 0.002867 unidades.
+
+Con el conjunto de validación crearemos las predicciones con el modelo creado anteriormente y después calcularemos la raíz del error cuadrático medio (RMSE) y la utilizaremos como medida de precisión de nuestro modelo.
+
+```{r}
+reg_lineal_pred <- predict(best_reg, newdata = bank.test)
+rmse_reg_lin <- sqrt(MSE(y_pred = reg_lineal_pred, y_true = bank.test$Total_Trans_Ct))
+rmse_reg_lin
+```
+
+El RMSE que obtenemos está en la escala de la variable respuesta y se podría interpretar como un valor aceptable. Además de todo esto, pintaremos el normal QQ-plot y el gráfico de Fitted values vs Residuals.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+qq_plot_1 <- ggplot(as.data.frame(residuals(best_reg)),aes(sample = residuals(best_reg))) + 
+  geom_qq() 
+
+residual_plot_1 <- ggplot(data = best_reg, aes(x = .fitted, y = .resid))+
+    geom_jitter()+
+    geom_hline(yintercept = 0, linetype = "dashed")+
+    xlab("Fitted Values")+
+    ylab("Residuals")
+
+ggarrange(qq_plot_1, residual_plot_1)
+```
+
+Se puede observar cómo el normal QQ-plot sí parece estar bien ya que la mayoría de los puntos se mueven sobre la recta diagonal que pasa por el 0, mientras que el gráfico de los residuos contra los valors ajustados parece algo más caótico. 
+
+### Support vector regression (SVR)
+
+Dejando atrás la regresión lineal múltiple, continuaremos con el support vector regression. Realizamos el mismo proceso, entrenamos el modelo con el conjunto de entrenamiento y luego calculamos la predicción, para más tarde calcular el RMSE.
+
+
+```{r}
+svr <- svm(Total_Trans_Ct ~. -Attrition_Flag - Marital_Status_Married - Card_Category_Blue, 
+                 data = bank.train, 
+                 type = "eps-regression", 
+                 kernel = "radial")
+svr_pred <- predict(svr, newdata = bank.test)
+rmse_svr <- sqrt(MSE(y_pred = svr_pred, y_true = bank.test$Total_Trans_Ct))
+rmse_svr
+```
+
+Nos sale un RMSE más pequeño que la regresión lineal múltiple, con lo cual es mejor este modelo a priori. 
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+qq_plot_2 <- ggplot(as.data.frame(residuals(svr)),aes(sample = residuals(svr))) + 
+  geom_qq() 
+
+residual_plot_2 <- ggplot(data = data.frame("fitted" = svr$fitted, "resid" = svr$residuals),
+       aes(x = fitted, y = resid))+
+    geom_jitter()+
+    geom_hline(yintercept = 0, linetype = "dashed")+
+    xlab("Fitted Values")+
+    ylab("Residuals")
+ggarrange(qq_plot_2, residual_plot_2)
+```
+
+El normal QQ-plot y el gráfico de los valores ajustados vs residuos son muy parecidos que la regresión lineal.
+
+## Métodos de clasificación
+
+En este apartado aplicaremos los algoritmos de regresión logística, KNN, SVM y decision tree para clasificar la variable `Attrition_Flag`. 
+
+### Regresión logística
+
+Primero de todo vamos a entrenar el modelo con el conjunto de entrenamiento, realizando la regresión logística múltiple teniendo a la variable `Attrition_Flag_1` como variable de respuesta y todas las otras variables como explicativas (exceptuando `Attrition_Flag`, `Marital_Status_Married` y `Card_Category_Blue`). Utilizaremos el método de eliminación hacia atrás para encontrar el modelo más óptimo.
+
+```{r, results="hide"}
+reg_log <- glm(Attrition_Flag_1~.-Attrition_Flag - Marital_Status_Married - Card_Category_Blue,
+               data = bank.train, family = binomial)
+reg_backward <- step(reg_log, direction = "backward")
+```
+
+```{r}
+summary(reg_backward)
+```
+
+La interpretación de los coeficientes, tomando `Total_Trans_Amt` como ejemplo, sería: un aumento de una unidad en la variable `Total_Trans_Amt` (una unidad más de la cantidad total de transacciones) hace aumentar el logaritmo de la probabilidad de darse da baja del banco (en comparación con quedarse en el banco) en 0.0004761.
+
+Realizamos la predicción del modelo con el conjunto de test. Como la predicción nos la dará en probabilidades, consideramos que una probabilidad mayor que 0.5 es que el cliente se da de baja. Después, dibujamos la matriz de confusión y mostramos la precisión del modelo utilizando accuracy.
+
+```{r}
+reg_backward_probs <- predict(reg_backward, newdata = bank.test, type = "response")
+reg_backward_pred <- ifelse(reg_backward_probs > 0.5, 1, 0)
+reg_back_cm <- table(reg_backward_pred, bank.test$Attrition_Flag_1, 
+                     dnn = c("Predicción","Valor Real"))
+reg_back_cm
+reg_back_accu <- mean(reg_backward_pred == bank.test$Attrition_Flag_1)
+reg_back_accu
+```
+
+Vemos que la precisión del modelo es del `r reg_back_accu*100`% y nos fijamos en el error tipo II. El número de casos en los cuales nosotros predecimos que el cliente se queda y al final se da de baja es `r reg_back_cm[1,2]`, correspondiendo con los falsos negativos y su ratio es `r reg_back_cm[1,2]/(reg_back_cm[1,2] + reg_back_cm[2,2])` ($\frac{FN}{TP + FN}$). Es un ratio un tanto alto, y no nos interesa que sea tanto ya que quiere decir que predecimos mal los casos en los que creemos que se quedan pero al final se van. Una solución sería considerar que se van a partir de una probabilidad más baja que 0.5, pero en detrimento bajamos la precisión.
+
+### KNN
+
+El método de K-Nearest Neighbors es otro método de clasificación. El algoritmo reconoce patrones en los datos sin un aprendizaje específico, consiguiendo un criterio de agrupamiento de los datos a partir de un conjunto de entrenamiento. Necesitamos normalizar los datos que tenemos para poder proceder con el método, y luego creamos de nuevos los conjuntos de entrenamiento y de validación normalizados.
+
+```{r}
+normalizar <- function(x){
+  return ((x - min(x))/(max(x) - min(x)))
+}
+bank.normalized <- as.data.frame(lapply(bank[,2:27], normalizar))
+set.seed(284)
+split.norm <- sample.split(bank.normalized$Attrition_Flag_1, SplitRatio = 0.8)
+bank.train.norm <- subset(bank.normalized, split.norm == TRUE)
+bank.test.norm <- subset(bank.normalized, split.norm == FALSE)
+```
+
+A continuación vamos a clasificar nuestras observaciones, para más tarde construir la matriz de confusión.
+
+```{r}
+bank_knn <- knn(train = bank.train.norm[,-18], test = bank.test.norm[,-18], 
+          cl = bank.train.norm$Attrition_Flag_1, k = 10)
+knn_cm <- table(bank_knn, bank.test.norm$Attrition_Flag_1, dnn =
+                  c("Predicción","Valor Real"))
+knn_cm
+knn_accu <- mean(bank_knn == bank.test.norm$Attrition_Flag_1)
+knn_accu
+```
+
+Obtenemos una precisión del `r knn_accu*100`%, mejorando la regresión logística y el análisis discriminante lineal. Vemos también que el número de falsos positivos que hay son `r knn_cm[1,2]`, y el ratio de falsos negativos es de `r knn_cm[1,2]/(knn_cm[1,2] + knn_cm[2,2])`, bastante más bajo que los otros dos modelos.
+
+### Decision tree
+
+Como nuestra variable dependiente es binaria, vamos a construir un árbol de clasificación en vez de un árbol de regresión. Este algoritmo, de forma general, separa los datos en grupos (las clases de la variable dependiente) utilizando la mejor variable explicativa en cada nodo. Vamos a construir el árbol de clasificación con el conjunto de entrenamiento cogiendo el parámetro de complejidad (cp) igual a 0. Luego haremos la predicción con el conjunto de test, para más adelante dibujar la matriz de confusión.
+
+```{r}
+bank_tree <- rpart(Attrition_Flag ~.-Attrition_Flag_1, data = bank.train, 
+                   method = "class", control = rpart.control(cp = 0))
+tree_prediction <- predict(bank_tree, newdata = bank.test, type = "class")
+tree_cm <- confusionMatrix(tree_prediction, bank.test$Attrition_Flag)
+tree_cm
+```
+
+Obtenemos una precisión del modelo del `r unname(tree_cm$overall[1])*100`% y `r tree_cm$table[2,1]` falsos negativos, con lo cual el ratio de falsos negativos es `r tree_cm$table[2,1]/(tree_cm$table[2,1] + tree_cm$table[1,1])`. Ahora vamos a dibujar el árbol que hemos obtenido.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+rpart.plot(bank_tree)
+```
+
+Nos sale un árbol bastante grande y difícil de interpretar. Nos da a pensar que podemos podar el árbol. Para ello, vamos a hacer un análisis del parámetro de complejidad. Cogeremos el valor del parámetro que minimice el error de la validación cruzada (xerror).
+
+```{r}
+printcp(bank_tree)
+```
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+plotcp(bank_tree)
+min_best_cp <- bank_tree$cptable[which.min(bank_tree$cptable[,"xerror"]),"CP"]
+```
+
+Con el valor del cp óptimo, podamos el árbol y construimos la predicción junto con la matriz de confusión y el dibujo del árbol.
+
+```{r}
+bank_tree_fit <- prune(bank_tree, min_best_cp)
+tree_fit_prediction <- predict(bank_tree_fit, newdata = bank.test, type = "class")
+tree_fit_cm <- confusionMatrix(tree_fit_prediction, bank.test$Attrition_Flag)
+tree_fit_cm
+```
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+rpart.plot(bank_tree_fit)
+```
+
+Nos sale una precisión de `r unname(tree_fit_cm$overall[1])*100`%, ligeramente mejor que el árbol sin podar. Además, tenemos `r tree_fit_cm$table[2,1]` falsos negativos, un poco más que el árbol sin podar. Aunque puede parecer imperceptible, el árbol realmente se poda y se reducen las ramas y los nodos, pero sigue siendo un árbol difícil de interpretar.
+
+
+### SVM
+
+De la misma forma que en el caso de la regresión, realizaremos esta vez el mismo proceso pero para clasificar la variable `Attrition_Flag`. Al tratarse de clasificación, 
+
+```{r}
+svm <- svm(Attrition_Flag~. -Attrition_Flag_1 - Marital_Status_Married - Card_Category_Blue, 
+                 data = bank.train.scale, 
+                 type = "C-classification", 
+                 kernel = "linear")
+svm_pred <- predict(svm, newdata = bank.test.scale)
+svm_cm <- confusionMatrix(svm_pred, bank.test.scale$Attrition_Flag)
+svm_cm$table
+svm_cm$overall[1]
+```
+
+Obtenemos una precisión del modelo del `r unname(svm_cm$overall[1])*100`% y `r svm_cm$table[2,1]` falsos negativos, con lo cual el ratio de falsos negativos es `r svm_cm$table[2,1]/(svm_cm$table[2,1] + svm_cm$table[1,1])`. 
+
+Es importante introducir el concepto de hiperparámetro: son aquellos parámetros en los que el usuario debe introducir sus valores y no es el propio algoritmo que encuentra su valor óptimo. Necesitamos hacer tuning (encontrar el mejor hiperparámetro para el algoritmo) para encontrar el mejor hiperparámetro cost (aplicaremos tuning por grid search). 
+
+```{r}
+set.seed(284)
+svm_cv <- tune("svm", Attrition_Flag ~. -Attrition_Flag_1 - Marital_Status_Married - Card_Category_Blue, data = bank.train.scale,
+               kernel = 'linear',
+               ranges = list(cost = c(0.01, 0.1, 1, 5, 10, 20, 30)))
+summary(svm_cv)
+ggplot(data = svm_cv$performances, aes(x = cost, y = error)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Error de clasificación vs hiperparámetro C") +
+  theme_bw()
+best_smv <- svm_cv$best.model
+best_svm_pred <- predict(best_smv, newdata = bank.test.scale)
+best_svm_cm <- confusionMatrix(best_svm_pred, bank.test.scale$Attrition_Flag)
+best_svm_cm$table
+best_svm_cm$overall[1]
+```
+
+No hay diferencia ya que el error rate son muy parecidos para todos los valores del hiperparámetro cost.
+
+La precisión que conseguimos después de realizar el tuning es `r unname(best_svm_cm$overall[1])*100`%, con `r best_svm_cm$table[2,1]` falsos negativos y el ratio de falsos negativos es `r best_svm_cm$table[2,1]/(best_svm_cm$table[2,1] + best_svm_cm$table[1,1])`.
+
+## ACP, Clustering y otros estudios con ACP
+
+### ACP
+
+Nuestro data set contiene muchas observaciones y más de 20 variables. Una de las cosas interesantes es poder pintar en un gráfico resultados visuales, pero con tantas variables no podemos proyectar sobre el plano o el espacio. Para conseguir este fin, vamos a realizar un método de reducción de dimensiones (Análisis de componentes principales) hasta conseguir quedarnos con 2 componentes principales. 
+
+```{r}
+acp = preProcess(x = select(bank, -c("Attrition_Flag","Attrition_Flag_1")), 
+                 method = "pca", pcaComp = 2)
+acp = predict(acp, bank)
+```
+
+### K-means Clustering
+
+A continuación realizaremos clustering usando k-means. Primero utilizaremos el método del codo para buscar el número de componentes principales que optimiza la elección de k. 
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+set.seed(284)
+wcss = vector()
+for (i in 1:10){
+  wcss[i] <- sum(kmeans(acp[,-1], i)$withinss)
+}
+plot(1:10, wcss, type = 'b', main = "Método del codo",
+     xlab = "Número de clusters (k)", ylab = "WCSS(k)")
+```
+
+Observamos que a partir de 4 clusters la curva empieza a tener poca bajada pronunciada, con lo cual coger 4 cluster podría ser la mejor opción.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+k_means = kmeans(acp[,-c(1,2)], 4,iter.max = 300, nstart = 10)
+clusplot(acp, 
+         k_means$cluster,
+         lines = 0,
+         shade = TRUE,
+         color = TRUE,
+         plotchar = FALSE,
+         span = TRUE,
+         main = "Clustering de clientes",
+         xlab = "PC1",
+         ylab = "PC2"
+         )
+```
+
+Las dos componentes principales nos explica un 77.6% de la variabilidad de los puntos. Se puede observar cómo el cluster verde está prácticamente dentro del cúster lila.
+
+
+### Regresión logística después de ACP
+
+De la misma forma que hemos hecho con el data set `bank`, para los conjuntos de entrenamiento y de validación también aplicaremos ACP para reducir la dimensión en 2. De esta forma podremos proyectar la precisión de los modelos en el plano. 
+
+```{r}
+acp_1 <- preProcess(x = select(bank.train, -c("Attrition_Flag","Attrition_Flag_1")), 
+                 method = "pca", pcaComp = 2)
+acp_train <- predict(acp_1, bank.train)
+acp_test <- predict(acp_1, bank.test)
+
+
+acp_train = select(acp_train, -c("Attrition_Flag"))
+acp_test = select(acp_test, -c("Attrition_Flag"))
+```
+
+Como nuestro conjunto de datos está desbalanceado respecto a la variable `Attrition_Flag` ya que hay un 84% aproximadamente de clientes que se quedan y solamente hay un 16% de clientes que abandonan. De alguna forma no hemos prestado atención en este desbalanceo ya que con los métodos sin aplicar ACP al final los resultados son bastante decentes, pero al aplicar ACP y reducir todo a 2 variables se nota muchísimo más este efecto de desbalanceo. Utilzaremos el paquete `ROSE` para balancear nuestros datos, y en vez de fijarnos en el accuracy nos centraremos más en la medida de AUC (área bajo la curva) que nos da la función `roc.curve`.
+
+```{r}
+data.rose.train <- ROSE(Attrition_Flag_1 ~., data = acp_train, seed = 1)$data
+reg_log_acp <- glm(Attrition_Flag_1~., data = data.rose.train, family = binomial)
+reg_log_probs <- predict(reg_log_acp, newdata = acp_test, type = "response")
+reg_log_pred <- ifelse(reg_log_probs > 0.5,1,0)
+reg_cm <- table(reg_log_pred, acp_test$Attrition_Flag_1, dnn = c("Predicción","Valor Real"))
+reg_accu <- mean(reg_log_pred == acp_test$Attrition_Flag_1)
+reg_cm
+reg_accu
+```
+
+Obtenemos una precisión del `r reg_accu*100`%, un valor bastante peor que la regresión logística anterior. Vemos también que el número de falsos positivos que hay son `r reg_cm[1,2]`, y el ratio de falsos negativos es de `r reg_cm[1,2]/(reg_cm[1,2] + reg_cm[2,2])`.
+
+A continuación, pintaremos en un gráfico la región de la predicción y donde realmente se sitúan los puntos en el conjunto de validación.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+data.rose.test <- ROSE(Attrition_Flag_1 ~., data = acp_test, seed = 1)$data
+set = data.rose.test
+X1 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+X2 = seq(min(set[, 3]) - 1, max(set[, 3]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('PC1', "PC2")
+y_grid = predict(reg_log_acp, newdata = grid_set, type = "response")
+y_grid = ifelse(y_grid > 0.5,1,0)
+plot(set[,c(2,3)],
+     main = 'Clasificación (Conjunto de Validación)',
+     xlab = 'PC1', ylab = 'PC2',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set[, c(2,3)], pch = 21, bg = ifelse(set[, 1] == 1, 'green4', 'red3'))
+```
+
+Realmente se puede observar que el modelo se equivoca mucho, dándonos cuenta de que el modelo de regresión logística tal vez no sea un buen modelo para clasificar. 
+
+
+```{r}
+roc.curve(acp_test$Attrition_Flag_1, reg_lineal_pred, plotit = F)
+```
+
+Pero la medida AUC nos da un valor alto indicando que es un buen modelo. 
+
+## Métodos más potentes
+
+Como ampliación de los métodos usados anteriormente vamos a implementar los métodos de Random Forest y Gradient Boosting. Son dos algoritmos bastante pesados computacionalmente, y es por esta razón por la que los hemos dejado para lo último. 
+
+### Random Forest
+
+Un solo árbol de decisión no es suficiente, ya que sufren de problemas de sesgo y varianza en las predicciones. Para poder mejorar tanto los problemas comentados y una mejor precisión, vamos a introducir el concepto de Random Forest. Random Forest es un método tipo ensemble que está formado por un grupo de modelos predictivos (clasificatorios en nuestro caso) alcanzando una precisión y una estabilidad mejores. Los árboles sufren problemas de sesgo y varianza en las predicciones; Random Forest forma parte de los métodos de Bagging y éstos funcionan de la siguiente manera:
+
+* Crear muchos subconjuntos de datos.
+* Construir múltiples modelos.
+* Combinar los modelos construidos.
+
+Random Forest crea un grupo de modelos aparentemente débiles (múltiples árboles de decisión), para combinarlos y transformarlos en un modelo más potente. 
+
+R tiene una función específica llamada `randomForest` del paquete `randomForest`, pero esta función no nos encuentra el mejor valor de `mtry` (nuestro hiperparámetro). Usaremos el paquete `caret` que contiene la función `train`, la cual nos encuentra el valor de `mtry` que maximiza la precisión de los modelos con cross validation K-folds. A continuación construiremos el modelo con el conjunto de entrenamiento y también usaremos cross-validation 5-folds.
+
+```{r, message = FALSE, warning=FALSE}
+fitcontrol <- trainControl(method = "cv", number = 5, summaryFunction = defaultSummary)
+rf_grid <- expand.grid(mtry = c(1:25))
+bank_rf <- train(Attrition_Flag ~. -Attrition_Flag_1, data = bank.train,
+                 method = "rf", metric = "Accuracy", trControl = fitcontrol, 
+                 tuneGrid = rf_grid, distribution = "binomial")
+bank_rf
+```
+
+```{r}
+best_mtry = unname(unlist(bank_rf$bestTune))
+```
+
+Vemos que el modelo mismo nos devuelve el valor óptimo que maximiza la precisión de los modelos, con lo cual `mtry` = `r best_mtry` es el valor elegido. Vamos a graficarlo para verlo de forma más visual.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+plot(bank_rf)
+```
+
+En efecto, el `mtry` que maximiza la precisión es `r best_mtry`.
+
+Realizamos la predicción del modelo con el conjunto de test y creamos la matriz de confusión.
+
+```{r}
+rf_pred <- predict(bank_rf, newdata = bank.test)
+rf_cm <- confusionMatrix(rf_pred, bank.test$Attrition_Flag)
+rf_cm
+```
+
+Nos proporciona una precisión de `r unname(rf_cm$overall[1])*100`% y `r rf_cm$table[2,1]` falsos negativos. La precisión mejora sustancialmente respecto a los otros métodos, pero no llega a la precisión de K-Nearest Neighbors.
+
+### Gradient Boosting
+
+Gradient Boosting se trata de otro método de ensamble para problemas de regresión y clasificación. Al igual que Random Forest, consiste en construir un grupo de modelos débiles para transformarlos en uno robusto. Es un método de boosting que tiene como objetivo optimizar una función coste arbitraria (la precisión en nuestro caso). Como hemos hecho con Random Forest, haremos tuning por grid search y encontraremos, con la función `train`, los valores de los hiperparámetros `interaction.depth`, `n.trees`, `shrinkage` y `n.minobsinnode`. Cogemos el conjunto de entrenamiento y construimos el modelo. 
+
+```{r, results="hide"}
+gbm_grid =  expand.grid(interaction.depth = c(1,4,7,10),
+                        n.trees = c(500,1000,2000),
+                        shrinkage = c(0.005, 0.02,0.05),
+                        n.minobsinnode = 10)
+
+bank_gbm <- train(Attrition_Flag ~. -Attrition_Flag_1, data = bank.train, method = "gbm",
+                 metric = "Accuracy", trControl = fitcontrol, tuneGrid = gbm_grid)
+```
+
+```{r}
+bank_gbm
+```
+
+Los valores de los hiperparámetros que maximizan la precisión son:
+
+* `n.trees` = `r bank_gbm$bestTune$n.trees`
+* `interaction.depth` = `r bank_gbm$bestTune$interaction.depth`
+* `shrinkage` = `r bank_gbm$bestTune$shrinkage`
+* `n.minobsinnode` = `r bank_gbm$bestTune$n.minobsinnode`
+
+Graficamos estos hiperparámetros para corroborar el resultado obtenido por el algoritmo. A continuación, predecimos con el conjunto de test y construimos la matriz de confusión.
+
+```{r, fig.align="center", fig.width=7, fig.height=4, message=FALSE, warning=FALSE}
+plot(bank_gbm)
+gbm_pred <- predict(bank_gbm, bank.test)
+gbm_cm <- confusionMatrix(gbm_pred, bank.test$Attrition_Flag)
+gbm_cm
+```
+
+Obtenemos una precisión de `r unname(gbm_cm$overall[1])*100`% y `r gbm_cm$table[2,1]` falsos negativos. 

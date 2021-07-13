@@ -1,0 +1,1743 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames*,x11names*}{xcolor}
+%
+\documentclass[
+]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={SVM: Práctica de regresión},
+  pdfauthor={Jun De Wu},
+  colorlinks=true,
+  linkcolor=red,
+  filecolor=Maroon,
+  citecolor=purple,
+  urlcolor=blue,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\usepackage[margin=1in]{geometry}
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{5}
+\renewcommand{\contentsname}{Contenidos}
+
+\title{SVM: Práctica de regresión}
+\author{Jun De Wu}
+\date{12/06/2021}
+
+\begin{document}
+\maketitle
+
+{
+\hypersetup{linkcolor=blue}
+\setcounter{tocdepth}{2}
+\tableofcontents
+}
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{require}\NormalTok{(tidyverse)}
+\KeywordTok{require}\NormalTok{(e1071)}
+\KeywordTok{require}\NormalTok{(MLmetrics)}
+\KeywordTok{require}\NormalTok{(caTools)}
+\KeywordTok{require}\NormalTok{(ggcorrplot)}
+\KeywordTok{require}\NormalTok{(FNN)}
+\KeywordTok{require}\NormalTok{(rpart)}
+\KeywordTok{require}\NormalTok{(rpart.plot)}
+\KeywordTok{require}\NormalTok{(randomForest)}
+\KeywordTok{require}\NormalTok{(neuralnet)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{introducciuxf3n}{%
+\section{Introducción}\label{introducciuxf3n}}
+
+Nuestro conjunto de datos contiene información sobre los bloques de
+vivienda de California en el año 1990. De media, un bloque de vivienda
+contenía 1425.5 personas que vivían en un espacio reducido. En total
+tenemos 20640 observaciones y 9 variables.
+
+\hypertarget{exploraciuxf3n-de-los-datos}{%
+\section{Exploración de los datos}\label{exploraciuxf3n-de-los-datos}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset <-}\StringTok{ }\KeywordTok{read.csv}\NormalTok{(}\StringTok{"cadata2.csv"}\NormalTok{, }\DataTypeTok{sep =} \StringTok{","}\NormalTok{, }\DataTypeTok{header =} \OtherTok{TRUE}\NormalTok{)}
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset}
+\KeywordTok{glimpse}\NormalTok{(dataset)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Rows: 20,640
+## Columns: 9
+## $ median_house_value <dbl> 452600, 358500, 352100, 341300, 342200, 269700, ...
+## $ median_income      <dbl> 8.3252, 8.3014, 7.2574, 5.6431, 3.8462, 4.0368, ...
+## $ housing_median_age <dbl> 41, 21, 52, 52, 52, 52, 52, 52, 42, 52, 52, 52, ...
+## $ total_rooms        <dbl> 880, 7099, 1467, 1274, 1627, 919, 2535, 3104, 25...
+## $ total_bedrooms     <dbl> 129, 1106, 190, 235, 280, 213, 489, 687, 665, 70...
+## $ population         <dbl> 322, 2401, 496, 558, 565, 413, 1094, 1157, 1206,...
+## $ households         <dbl> 126, 1138, 177, 219, 259, 193, 514, 647, 595, 71...
+## $ latitude           <dbl> 37.88, 37.86, 37.85, 37.85, 37.85, 37.85, 37.84,...
+## $ longitude          <dbl> -122.23, -122.22, -122.24, -122.25, -122.25, -12...
+\end{verbatim}
+
+Hay nueve variables:
+
+\begin{itemize}
+\item
+  \texttt{median\_house\_value}: Precio medio de la vivienda
+\item
+  \texttt{median\_income}: Ingreso medio de una familia
+\item
+  \texttt{housing\_median\_age}: Edad media de las viviendas
+\item
+  \texttt{total\_rooms}: Número total de cuartos
+\item
+  \texttt{total\_bedrooms}: Número total de habitaciones
+\item
+  \texttt{population}: Población del bloque
+\item
+  \texttt{households}: Familia que viven en el bloque
+\item
+  \texttt{latitude}: Latitud de la distancia entre los centroides de
+  cada grupo de bloque
+\item
+  \texttt{longitude}: Longitud de la distancia entre los centroides de
+  cada grupo de bloque
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(dataset)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##  median_house_value median_income     housing_median_age  total_rooms   
+##  Min.   : 14999     Min.   : 0.4999   Min.   : 1.00      Min.   :    2  
+##  1st Qu.:119600     1st Qu.: 2.5634   1st Qu.:18.00      1st Qu.: 1448  
+##  Median :179700     Median : 3.5348   Median :29.00      Median : 2127  
+##  Mean   :206856     Mean   : 3.8707   Mean   :28.64      Mean   : 2636  
+##  3rd Qu.:264725     3rd Qu.: 4.7432   3rd Qu.:37.00      3rd Qu.: 3148  
+##  Max.   :500001     Max.   :15.0001   Max.   :52.00      Max.   :39320  
+##  total_bedrooms     population      households        latitude    
+##  Min.   :   1.0   Min.   :    3   Min.   :   1.0   Min.   :32.54  
+##  1st Qu.: 295.0   1st Qu.:  787   1st Qu.: 280.0   1st Qu.:33.93  
+##  Median : 435.0   Median : 1166   Median : 409.0   Median :34.26  
+##  Mean   : 537.9   Mean   : 1425   Mean   : 499.5   Mean   :35.63  
+##  3rd Qu.: 647.0   3rd Qu.: 1725   3rd Qu.: 605.0   3rd Qu.:37.71  
+##  Max.   :6445.0   Max.   :35682   Max.   :6082.0   Max.   :41.95  
+##    longitude     
+##  Min.   :-124.3  
+##  1st Qu.:-121.8  
+##  Median :-118.5  
+##  Mean   :-119.6  
+##  3rd Qu.:-118.0  
+##  Max.   :-114.3
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{anyNA}\NormalTok{(dataset)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE
+\end{verbatim}
+
+Afortunadamente no hay valores NA en nuestro conjunto de datos.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{correlacion <-}\StringTok{ }\KeywordTok{cor}\NormalTok{(dataset, }
+                   \DataTypeTok{method =} \StringTok{"spearman"}\NormalTok{)}
+
+\KeywordTok{ggcorrplot}\NormalTok{(correlacion, }\DataTypeTok{lab =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{lab_size =} \FloatTok{1.7}\NormalTok{, }\DataTypeTok{legend.title =} \StringTok{"Correlación", }
+\StringTok{           lab_col = "}\NormalTok{blue4}\StringTok{", colors = c("}\NormalTok{yellow4}\StringTok{", "}\NormalTok{white}\StringTok{", "}\NormalTok{green4}\StringTok{")) +}
+\StringTok{  theme_bw() +}
+\StringTok{  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +}
+\StringTok{  labs(x = "", y = "", title = "}\NormalTok{Matriz de correlación")}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-4-1.pdf}
+
+Hay muchas variables correlacionadas entre ellas pero no podemos
+eliminar ninguna ya que en los modelos de regresión vamos a utilizarlas
+todas (menos \texttt{latitude} y \texttt{longitude}).
+
+Analizaremos los outliers presentes en cada variable para ver si los
+dejamos o los eliminamos.
+
+\hypertarget{variable-median_house_value}{%
+\subsection{\texorpdfstring{Variable
+\texttt{median\_house\_value}}{Variable median\_house\_value}}\label{variable-median_house_value}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =} \DecValTok{0}\NormalTok{, }\DataTypeTok{y =}\NormalTok{ median_house_value)) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_boxplot}\NormalTok{(}\DataTypeTok{width =} \FloatTok{0.7}\NormalTok{, }\DataTypeTok{outlier.colour =} \StringTok{"blue4"}\NormalTok{, }
+               \DataTypeTok{outlier.size =} \DecValTok{2}\NormalTok{, }\DataTypeTok{outlier.shape =} \DecValTok{18}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{stat_summary}\NormalTok{(}\DataTypeTok{fun.y =}\NormalTok{ mean, }\DataTypeTok{geom =} \StringTok{"point"}\NormalTok{, }\DataTypeTok{shape =} \DecValTok{8}\NormalTok{, }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{color =}\StringTok{"red4"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme_linedraw}\NormalTok{() }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"x"}\NormalTok{, }\DataTypeTok{y =} \StringTok{"median_house_value"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{angle =} \DecValTok{45}\NormalTok{, }\DataTypeTok{vjust =} \DecValTok{1}\NormalTok{, }\DataTypeTok{hjust=}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-5-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{table}\NormalTok{(dataset}\OperatorTok{$}\NormalTok{median_house_value }\OperatorTok{>}\StringTok{ }\DecValTok{400000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+## 18896  1744
+\end{verbatim}
+
+Vemos que los puntos outliers los tenemos por encima de 400000\$ y hay
+1744 observaciones. No los quitaremos ya que hay muchas y se trata de la
+variable objetivo.
+
+Hay 1744 outliers en esta variable.
+
+\hypertarget{variable-median_income}{%
+\subsection{\texorpdfstring{Variable
+\texttt{median\_income}}{Variable median\_income}}\label{variable-median_income}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =} \DecValTok{0}\NormalTok{, }\DataTypeTok{y =}\NormalTok{ median_income)) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_boxplot}\NormalTok{(}\DataTypeTok{width =} \FloatTok{0.7}\NormalTok{, }\DataTypeTok{outlier.colour =} \StringTok{"blue4"}\NormalTok{, }
+               \DataTypeTok{outlier.size =} \DecValTok{2}\NormalTok{, }\DataTypeTok{outlier.shape =} \DecValTok{18}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{stat_summary}\NormalTok{(}\DataTypeTok{fun.y =}\NormalTok{ mean, }\DataTypeTok{geom =} \StringTok{"point"}\NormalTok{, }\DataTypeTok{shape =} \DecValTok{8}\NormalTok{, }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{color =}\StringTok{"red4"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme_linedraw}\NormalTok{() }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"x"}\NormalTok{, }\DataTypeTok{y =} \StringTok{"median_income"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{angle =} \DecValTok{45}\NormalTok{, }\DataTypeTok{vjust =} \DecValTok{1}\NormalTok{, }\DataTypeTok{hjust=}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-7-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{table}\NormalTok{(dataset}\OperatorTok{$}\NormalTok{median_income }\OperatorTok{>}\StringTok{ }\FloatTok{12.5}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+## 20546    94
+\end{verbatim}
+
+En este caso, vemos que los outliers son los bloques que tienen como
+ingreso medio por familia por encima de 7.5. Sin embargo quitaremos los
+que estén por encima de 12.5 ya que si no quitaríamos muchas
+observaciones.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset_}\DecValTok{1} \OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(dataset_}\DecValTok{1}\OperatorTok{$}\NormalTok{median_income }\OperatorTok{<=}\StringTok{ }\FloatTok{12.5}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{variable-housing_median_age}{%
+\subsection{\texorpdfstring{Variable
+\texttt{housing\_median\_age}}{Variable housing\_median\_age}}\label{variable-housing_median_age}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =} \DecValTok{0}\NormalTok{, }\DataTypeTok{y =}\NormalTok{ housing_median_age)) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_boxplot}\NormalTok{(}\DataTypeTok{width =} \FloatTok{0.7}\NormalTok{, }\DataTypeTok{outlier.colour =} \StringTok{"blue4"}\NormalTok{, }
+               \DataTypeTok{outlier.size =} \DecValTok{2}\NormalTok{, }\DataTypeTok{outlier.shape =} \DecValTok{18}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{stat_summary}\NormalTok{(}\DataTypeTok{fun.y =}\NormalTok{ mean, }\DataTypeTok{geom =} \StringTok{"point"}\NormalTok{, }\DataTypeTok{shape =} \DecValTok{8}\NormalTok{, }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{color =}\StringTok{"red4"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme_linedraw}\NormalTok{() }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"x"}\NormalTok{, }\DataTypeTok{y =} \StringTok{"housing_median_age"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{angle =} \DecValTok{45}\NormalTok{, }\DataTypeTok{vjust =} \DecValTok{1}\NormalTok{, }\DataTypeTok{hjust=}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-10-1.pdf}
+
+No hay ningún outlier para esta variable, entonces no quitaremos ningún
+dato.
+
+\hypertarget{variable-total_rooms}{%
+\subsection{\texorpdfstring{Variable
+\texttt{total\_rooms}}{Variable total\_rooms}}\label{variable-total_rooms}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =} \DecValTok{0}\NormalTok{, }\DataTypeTok{y =}\NormalTok{ total_rooms)) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_boxplot}\NormalTok{(}\DataTypeTok{width =} \FloatTok{0.7}\NormalTok{, }\DataTypeTok{outlier.colour =} \StringTok{"blue4"}\NormalTok{, }
+               \DataTypeTok{outlier.size =} \DecValTok{2}\NormalTok{, }\DataTypeTok{outlier.shape =} \DecValTok{18}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{stat_summary}\NormalTok{(}\DataTypeTok{fun.y =}\NormalTok{ mean, }\DataTypeTok{geom =} \StringTok{"point"}\NormalTok{, }\DataTypeTok{shape =} \DecValTok{8}\NormalTok{, }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{color =}\StringTok{"red4"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme_linedraw}\NormalTok{() }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"x"}\NormalTok{, }\DataTypeTok{y =} \StringTok{"total_rooms"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{angle =} \DecValTok{45}\NormalTok{, }\DataTypeTok{vjust =} \DecValTok{1}\NormalTok{, }\DataTypeTok{hjust=}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-11-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{table}\NormalTok{(dataset}\OperatorTok{$}\NormalTok{total_rooms }\OperatorTok{>}\StringTok{ }\DecValTok{30000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+## 20633     7
+\end{verbatim}
+
+El número total de cuartos varía mucho dependiendo de la ubicación y el
+tipo de cada bloque, con lo cual hay una gran cantidad de outliers.
+Consideraremos los bloques que tienen más de 30000 cuartos como outliers
+y los eliminaremos.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset_}\DecValTok{1} \OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(dataset_}\DecValTok{1}\OperatorTok{$}\NormalTok{total_rooms }\OperatorTok{<=}\StringTok{ }\DecValTok{30000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{variable-total_bedrooms}{%
+\subsection{\texorpdfstring{Variable
+\texttt{total\_bedrooms}}{Variable total\_bedrooms}}\label{variable-total_bedrooms}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =} \DecValTok{0}\NormalTok{, }\DataTypeTok{y =}\NormalTok{ total_bedrooms)) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_boxplot}\NormalTok{(}\DataTypeTok{width =} \FloatTok{0.7}\NormalTok{, }\DataTypeTok{outlier.colour =} \StringTok{"blue4"}\NormalTok{, }
+               \DataTypeTok{outlier.size =} \DecValTok{2}\NormalTok{, }\DataTypeTok{outlier.shape =} \DecValTok{18}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{stat_summary}\NormalTok{(}\DataTypeTok{fun.y =}\NormalTok{ mean, }\DataTypeTok{geom =} \StringTok{"point"}\NormalTok{, }\DataTypeTok{shape =} \DecValTok{8}\NormalTok{, }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{color =}\StringTok{"red4"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme_linedraw}\NormalTok{() }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"x"}\NormalTok{, }\DataTypeTok{y =} \StringTok{"total_bedrooms"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{angle =} \DecValTok{45}\NormalTok{, }\DataTypeTok{vjust =} \DecValTok{1}\NormalTok{, }\DataTypeTok{hjust=}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-14-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{table}\NormalTok{(dataset}\OperatorTok{$}\NormalTok{total_bedrooms }\OperatorTok{>}\StringTok{ }\DecValTok{4000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+## 20614    26
+\end{verbatim}
+
+Igual que el caso anterior, quitaremos las 26 observaciones que tienen
+más de 4000 habitaciones ya que sería observaciones muy atípicas.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset_}\DecValTok{1} \OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(dataset_}\DecValTok{1}\OperatorTok{$}\NormalTok{total_bedrooms }\OperatorTok{<=}\StringTok{ }\DecValTok{4000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{variable-population}{%
+\subsection{\texorpdfstring{Variable
+\texttt{population}}{Variable population}}\label{variable-population}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =} \DecValTok{0}\NormalTok{, }\DataTypeTok{y =}\NormalTok{ population)) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_boxplot}\NormalTok{(}\DataTypeTok{width =} \FloatTok{0.7}\NormalTok{, }\DataTypeTok{outlier.colour =} \StringTok{"blue4"}\NormalTok{, }
+               \DataTypeTok{outlier.size =} \DecValTok{2}\NormalTok{, }\DataTypeTok{outlier.shape =} \DecValTok{18}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{stat_summary}\NormalTok{(}\DataTypeTok{fun.y =}\NormalTok{ mean, }\DataTypeTok{geom =} \StringTok{"point"}\NormalTok{, }\DataTypeTok{shape =} \DecValTok{8}\NormalTok{, }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{color =}\StringTok{"red4"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme_linedraw}\NormalTok{() }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"x"}\NormalTok{, }\DataTypeTok{y =} \StringTok{"population"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{angle =} \DecValTok{45}\NormalTok{, }\DataTypeTok{vjust =} \DecValTok{1}\NormalTok{, }\DataTypeTok{hjust=}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-17-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{table}\NormalTok{(dataset}\OperatorTok{$}\NormalTok{population }\OperatorTok{>}\StringTok{ }\DecValTok{20000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+## 20638     2
+\end{verbatim}
+
+La población es importante. Consideraremos los bloques que tienen más de
+20000 habitantes como outliers y los eliminaremos.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset_}\DecValTok{1} \OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(dataset_}\DecValTok{1}\OperatorTok{$}\NormalTok{population }\OperatorTok{<=}\StringTok{ }\DecValTok{20000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{variable-households}{%
+\subsection{\texorpdfstring{Variable
+\texttt{households}}{Variable households}}\label{variable-households}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ggplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =} \DecValTok{0}\NormalTok{, }\DataTypeTok{y =}\NormalTok{ households)) }\OperatorTok{+}\StringTok{ }
+\StringTok{  }\KeywordTok{geom_boxplot}\NormalTok{(}\DataTypeTok{width =} \FloatTok{0.7}\NormalTok{, }\DataTypeTok{outlier.colour =} \StringTok{"blue4"}\NormalTok{, }
+               \DataTypeTok{outlier.size =} \DecValTok{2}\NormalTok{, }\DataTypeTok{outlier.shape =} \DecValTok{18}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{stat_summary}\NormalTok{(}\DataTypeTok{fun.y =}\NormalTok{ mean, }\DataTypeTok{geom =} \StringTok{"point"}\NormalTok{, }\DataTypeTok{shape =} \DecValTok{8}\NormalTok{, }\DataTypeTok{size =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{color =}\StringTok{"red4"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme_linedraw}\NormalTok{() }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{x =} \StringTok{"x"}\NormalTok{, }\DataTypeTok{y =} \StringTok{"households"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{angle =} \DecValTok{45}\NormalTok{, }\DataTypeTok{vjust =} \DecValTok{1}\NormalTok{, }\DataTypeTok{hjust=}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-20-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{table}\NormalTok{(dataset}\OperatorTok{$}\NormalTok{households }\OperatorTok{>}\StringTok{ }\DecValTok{4000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+## 20625    15
+\end{verbatim}
+
+El número de familia que viven en un bloque que son considerados
+outliers es por encima 1000. Pero consideraremos eliminar los bloques
+que tienen más de 4000 familias viviendo en ese bloque.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset_}\DecValTok{1} \OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(dataset_}\DecValTok{1}\OperatorTok{$}\NormalTok{households }\OperatorTok{<=}\StringTok{ }\DecValTok{4000}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{svr}{%
+\section{SVR}\label{svr}}
+
+El modelo que vamos a construir es el siguiente:
+
+\[\begin{equation*}
+        \begin{split}
+            \mbox{ln(median house value)} &= a_1 + a_2\mbox{median income} + a_3\mbox{median income}^2 + a_4\mbox{median income}^3 + a_5\mbox{ln(housing median_age)} \\
+            & + a_6ln(\frac{\mbox{total rooms}}{population}) + a_7ln(\frac{\mbox{total bedrooms}}{population}) a_8ln(\frac{population}{households}) + a_9ln(households)\\
+        \end{split}
+\end{equation*}\]
+
+Entonces vamos a construir un data frame que contenga estas variables y
+eliminamos las originales.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset_}\DecValTok{1} \OperatorTok{%>%}
+\StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{ln_median_house_value =} \KeywordTok{log}\NormalTok{(median_house_value), }\DataTypeTok{median_income_2 =}\NormalTok{ median_income}\OperatorTok{^}\DecValTok{2}\NormalTok{, }
+         \DataTypeTok{median_income_3 =}\NormalTok{ median_income}\OperatorTok{^}\DecValTok{3}\NormalTok{, }
+         \DataTypeTok{ln_housing_median_age =} \KeywordTok{log}\NormalTok{(housing_median_age), }\DataTypeTok{ln_total_rooms_population =}
+           \KeywordTok{log}\NormalTok{(total_rooms}\OperatorTok{/}\NormalTok{population), }\DataTypeTok{ln_total_bedrooms_population =}
+           \KeywordTok{log}\NormalTok{(total_bedrooms}\OperatorTok{/}\NormalTok{population), }\DataTypeTok{ln_population_households =}
+           \KeywordTok{log}\NormalTok{(population}\OperatorTok{/}\NormalTok{households), }\DataTypeTok{ln_households =} \KeywordTok{log}\NormalTok{(households))}
+
+\NormalTok{dataset_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\NormalTok{dataset_}\DecValTok{1} \OperatorTok{%>%}
+\StringTok{  }\NormalTok{dplyr}\OperatorTok{::}\KeywordTok{select}\NormalTok{(}\KeywordTok{c}\NormalTok{(}\StringTok{"median_income"}\NormalTok{, }\StringTok{"ln_median_house_value"}\NormalTok{, }\StringTok{"median_income_2"}\NormalTok{, }\StringTok{"median_income_3"}\NormalTok{,}
+           \StringTok{"ln_housing_median_age"}\NormalTok{, }\StringTok{"ln_total_rooms_population"}\NormalTok{, }\StringTok{"ln_total_bedrooms_population"}\NormalTok{,}
+           \StringTok{"ln_population_households"}\NormalTok{, }\StringTok{"ln_households"}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+Una vez que tenemos nuestro data set con las variables involucradas en
+la creación de los modelos que haremos, vamos a normalizar los datos
+menos la variable objetivo.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{normalize <-}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x)}
+\NormalTok{  \{}
+    \KeywordTok{return}\NormalTok{((x}\OperatorTok{-}\StringTok{ }\KeywordTok{min}\NormalTok{(x)) }\OperatorTok{/}\NormalTok{(}\KeywordTok{max}\NormalTok{(x)}\OperatorTok{-}\KeywordTok{min}\NormalTok{(x)))}
+\NormalTok{  \}}
+
+\NormalTok{dataset_norm <-}\StringTok{ }\KeywordTok{as.data.frame}\NormalTok{(}\KeywordTok{lapply}\NormalTok{(dataset_}\DecValTok{1}\NormalTok{[,}\OperatorTok{-}\DecValTok{2}\NormalTok{], normalize))}
+\NormalTok{dataset_norm <-}\StringTok{ }\NormalTok{dataset_norm }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{ln_median_house_value =}\NormalTok{ dataset_}\DecValTok{1}\OperatorTok{$}\NormalTok{ln_median_house_value)}
+\end{Highlighting}
+\end{Shaded}
+
+Separamos nuestro conjunto de datos en dos: conjunto de entrenamiento y
+conjunto de validación con un ratio de 70:30.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{284}\NormalTok{)}
+\NormalTok{split <-}\StringTok{ }\KeywordTok{sample.split}\NormalTok{(dataset_norm}\OperatorTok{$}\NormalTok{ln_median_house_value, }\DataTypeTok{SplitRatio =} \FloatTok{0.7}\NormalTok{)}
+\NormalTok{dt.train <-}\StringTok{ }\KeywordTok{subset}\NormalTok{(dataset_norm, split }\OperatorTok{==}\StringTok{ }\OtherTok{TRUE}\NormalTok{)}
+\NormalTok{dt.test <-}\StringTok{ }\KeywordTok{subset}\NormalTok{(dataset_norm, split }\OperatorTok{==}\StringTok{ }\OtherTok{FALSE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+Los errores que conseguimos en cada modelo los guardamos en estos dos
+vectores, dependiendo de si se trata de Epsilon-SVR o Nu-SVR.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{eps_reg <-}\StringTok{ }\KeywordTok{vector}\NormalTok{()}
+\NormalTok{nu_reg <-}\StringTok{ }\KeywordTok{vector}\NormalTok{()}
+\end{Highlighting}
+\end{Shaded}
+
+Vamos a realizar un total de 32 modelos de SVR. Para cada tipo de SVR
+(Epsilon-SVR y Nu-SVR) realizaremos modelos para los tres tipos de
+kernel: lineal, radial y polinomial (grado 2 y 3); y para cada uno de
+estos tipos de kernel haremos 4 modelos con estos valores del parámetro
+coste: \(\{0.001,0.01,0.1,1\}\). Utilzaremos la raíz del error
+cuadrático medio como la medida para valorar los modelos.
+
+\hypertarget{epsilon-svr}{%
+\subsection{Epsilon-SVR}\label{epsilon-svr}}
+
+\hypertarget{kernel-lineal}{%
+\subsubsection{Kernel lineal}\label{kernel-lineal}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{1}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{1}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{1}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{1}
+\NormalTok{rmse_svr_}\DecValTok{1}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.364327
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{2}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{2}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{2}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{2}
+\NormalTok{rmse_svr_}\DecValTok{2}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3553593
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{3}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{3}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{3}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{3}
+\NormalTok{rmse_svr_}\DecValTok{3}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3562273
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{4}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{4}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{4}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{4}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{4}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{4}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{4}
+\NormalTok{rmse_svr_}\DecValTok{4}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3564667
+\end{verbatim}
+
+\hypertarget{kernel-radial}{%
+\subsubsection{Kernel radial}\label{kernel-radial}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{5}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{5}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{5}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{5}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{5}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{5}
+\NormalTok{rmse_svr_}\DecValTok{5}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{6}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{6}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{6}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{6}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{6}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{6}
+\NormalTok{rmse_svr_}\DecValTok{6}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{7}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{7}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{7}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{7}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{7}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{7}
+\NormalTok{rmse_svr_}\DecValTok{7}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{8}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{8}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{8}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{8}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{8}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{8}
+\NormalTok{rmse_svr_}\DecValTok{8}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\hypertarget{kernel-polinomial-de-grado-2}{%
+\subsubsection{Kernel polinomial de grado
+2}\label{kernel-polinomial-de-grado-2}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{9}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{9}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{9}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{9}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{9}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{9}
+\NormalTok{rmse_svr_}\DecValTok{9}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{10}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{10}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{10}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{10}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{10}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{10}
+\NormalTok{rmse_svr_}\DecValTok{10}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{11}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{11}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{11}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{11}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{11}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{11}
+\NormalTok{rmse_svr_}\DecValTok{11}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{12}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{12}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{12}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{12}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{12}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{12}
+\NormalTok{rmse_svr_}\DecValTok{12}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\hypertarget{kernel-polinomial-de-grado-3}{%
+\subsubsection{Kernel polinomial de grado
+3}\label{kernel-polinomial-de-grado-3}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{13}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{13}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{13}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{13}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{13}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{13}
+\NormalTok{rmse_svr_}\DecValTok{13}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{14}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{14}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{14}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{14}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{14}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{14}
+\NormalTok{rmse_svr_}\DecValTok{14}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{15}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{15}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{15}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{15}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{15}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{15}
+\NormalTok{rmse_svr_}\DecValTok{15}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{16}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"eps-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{16}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{16}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{13}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{eps_reg[}\DecValTok{16}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{16}
+\NormalTok{rmse_svr_}\DecValTok{16}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.430074
+\end{verbatim}
+
+Visualizamos los errores que hemos obtenido con las Epsilon-SVR.
+Recordemos que hay cuatro modelos con costes diferentes para cada tipo
+de kernel.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{eps_reg}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##  [1] 0.3643270 0.3553593 0.3562273 0.3564667 0.4300740 0.4300740 0.4300740
+##  [8] 0.4300740 0.4300740 0.4300740 0.4300740 0.4300740 0.4300740 0.4300740
+## [15] 0.4300740 0.4300740
+\end{verbatim}
+
+Vemos que los únicos modelos que varían los errores son los SVR con
+kernel lineal, el resto tienen el mismo error. Vamos a coger el modelo
+con kernel lineal que tiene el error mínimo y mostrar los coeficientes
+obtenidos. Para el resto de modelos, como tienen el mismo error
+cogeremos uno de cada tipo y mostramos los coeficientes. Se muestra
+primero los coeficientes y el modelo nos proporciona el intercepto en
+los modelos que no tienen kernel lineal, para los modelos con kernel
+lineal utilizamos la función \texttt{coef}.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{coef}\NormalTok{(svr_}\DecValTok{2}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##                  (Intercept)                median_income 
+##                 -0.002033054                  1.178249585 
+##              median_income_2              median_income_3 
+##                  0.128703279                 -0.414484252 
+##        ln_housing_median_age    ln_total_rooms_population 
+##                  0.175245047                 -0.583977808 
+## ln_total_bedrooms_population     ln_population_households 
+##                  0.490559146                 -0.191890079 
+##                ln_households 
+##                  0.085330259
+\end{verbatim}
+
+Las características que influyen de forma positiva en el precio medio de
+la vivienda son las que tienen coeficiente positivo y viceversa. Vemos
+que este modelo nos refleja características que influyen en la subida
+del precio medio de la vivienda como el ingreso medio, la edad media de
+las viviendas, etc.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{t}\NormalTok{(svr_}\DecValTok{5}\OperatorTok{$}\NormalTok{coefs) }\OperatorTok{%*%}\StringTok{ }\NormalTok{svr_}\DecValTok{5}\OperatorTok{$}\NormalTok{SV}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      median_income median_income_2 median_income_3 ln_housing_median_age
+## [1,]      5.141163        4.631986        3.955364              1.119932
+##      ln_total_rooms_population ln_total_bedrooms_population
+## [1,]                  1.452933                    0.8935851
+##      ln_population_households ln_households
+## [1,]                 -1.86126      1.263571
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{5}\OperatorTok{$}\NormalTok{rho}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] -0.2285464
+\end{verbatim}
+
+En este modelo la única variable que influye de manera negativa en el
+precio medio de las viviendas es \texttt{ln\_population\_households}.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{t}\NormalTok{(svr_}\DecValTok{9}\OperatorTok{$}\NormalTok{coefs) }\OperatorTok{%*%}\StringTok{ }\NormalTok{svr_}\DecValTok{9}\OperatorTok{$}\NormalTok{SV}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      median_income median_income_2 median_income_3 ln_housing_median_age
+## [1,]       6.83127        5.387778        3.708434             0.8749337
+##      ln_total_rooms_population ln_total_bedrooms_population
+## [1,]                  3.591677                     1.855682
+##      ln_population_households ln_households
+## [1,]                -2.800658      1.363209
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{9}\OperatorTok{$}\NormalTok{rho}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] -0.007575784
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{t}\NormalTok{(svr_}\DecValTok{13}\OperatorTok{$}\NormalTok{coefs) }\OperatorTok{%*%}\StringTok{ }\NormalTok{svr_}\DecValTok{13}\OperatorTok{$}\NormalTok{SV}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      median_income median_income_2 median_income_3 ln_housing_median_age
+## [1,]      5.780997         4.53874        3.092505              1.247389
+##      ln_total_rooms_population ln_total_bedrooms_population
+## [1,]                  2.625476                     1.559946
+##      ln_population_households ln_households
+## [1,]                -2.655351      1.151274
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{13}\OperatorTok{$}\NormalTok{rho}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] -0.03050197
+\end{verbatim}
+
+Los dos últimos modelos son iguales que el segundo: la única variable
+que tiene coeficiente negativo es \texttt{ln\_population\_households}.
+
+\hypertarget{nu-svr}{%
+\subsection{Nu-SVR}\label{nu-svr}}
+
+\hypertarget{kernel-lineal-1}{%
+\subsubsection{Kernel lineal}\label{kernel-lineal-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{1}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{1}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{1}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{1}
+\NormalTok{rmse_svr_}\DecValTok{1}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3675666
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{2}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{2}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{2}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{2}
+\NormalTok{rmse_svr_}\DecValTok{2}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.355153
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{3}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{3}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{3}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{3}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{3}
+\NormalTok{rmse_svr_}\DecValTok{3}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3561244
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{4}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"linear"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{4}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{4}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{4}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{4}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{4}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{4}
+\NormalTok{rmse_svr_}\DecValTok{4}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3564781
+\end{verbatim}
+
+\hypertarget{kernel-radial-1}{%
+\subsubsection{Kernel radial}\label{kernel-radial-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{5}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{5}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{5}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{5}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{5}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{5}
+\NormalTok{rmse_svr_}\DecValTok{5}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{6}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{6}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{6}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{6}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{6}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{6}
+\NormalTok{rmse_svr_}\DecValTok{6}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{7}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{7}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{7}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{7}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{7}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{7}
+\NormalTok{rmse_svr_}\DecValTok{7}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{8}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"radial"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{8}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{8}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{8}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{8}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{8}
+\NormalTok{rmse_svr_}\DecValTok{8}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\hypertarget{kernel-polinomial-de-grado-2-1}{%
+\subsubsection{Kernel polinomial de grado
+2}\label{kernel-polinomial-de-grado-2-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{9}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{9}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{9}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{9}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{9}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{9}
+\NormalTok{rmse_svr_}\DecValTok{9}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{10}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{10}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{10}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{10}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{10}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{10}
+\NormalTok{rmse_svr_}\DecValTok{10}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{11}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{11}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{11}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{11}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{11}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{11}
+\NormalTok{rmse_svr_}\DecValTok{11}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{12}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{2}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{12}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{12}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{12}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{12}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{12}
+\NormalTok{rmse_svr_}\DecValTok{12}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\hypertarget{kernel-polinomial-de-grado-3-1}{%
+\subsubsection{Kernel polinomial de grado
+3}\label{kernel-polinomial-de-grado-3-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{13}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.001}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{13}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{13}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{13}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{13}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{13}
+\NormalTok{rmse_svr_}\DecValTok{13}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{14}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.01}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{14}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{14}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{14}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{14}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{14}
+\NormalTok{rmse_svr_}\DecValTok{14}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{15}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{15}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{15}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{15}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{15}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{15}
+\NormalTok{rmse_svr_}\DecValTok{15}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{16}\NormalTok{ <-}\StringTok{ }\KeywordTok{svm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{. , }
+                 \DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{type =} \StringTok{"nu-regression"}\NormalTok{, }
+                 \DataTypeTok{kernel =} \StringTok{"polynomial"}\NormalTok{, }\DataTypeTok{cost =} \DecValTok{1}\NormalTok{, }\DataTypeTok{gamma =} \FloatTok{0.1}\NormalTok{, }\DataTypeTok{degree =} \DecValTok{3}\NormalTok{)}
+\NormalTok{svr_pred_}\DecValTok{16}\NormalTok{ <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(svr_}\DecValTok{5}\NormalTok{, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_svr_}\DecValTok{16}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ svr_pred_}\DecValTok{13}\NormalTok{, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{nu_reg[}\DecValTok{16}\NormalTok{] <-}\StringTok{ }\NormalTok{rmse_svr_}\DecValTok{16}
+\NormalTok{rmse_svr_}\DecValTok{16}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4395939
+\end{verbatim}
+
+Vemos el vector que contiene los errores de cada modelo de las Nu-SVRs.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{nu_reg}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##  [1] 0.3675666 0.3551530 0.3561244 0.3564781 0.4395939 0.4395939 0.4395939
+##  [8] 0.4395939 0.4395939 0.4395939 0.4395939 0.4395939 0.4395939 0.4395939
+## [15] 0.4395939 0.4395939
+\end{verbatim}
+
+De igual forma que en el apartado anterior con los Epsilon-SVR, vamos a
+visualizar los coeficientes de solamente cuatro modelos.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{coef}\NormalTok{(svr_}\DecValTok{2}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##                  (Intercept)                median_income 
+##                 -0.004499637                  1.169082036 
+##              median_income_2              median_income_3 
+##                  0.145689816                 -0.426531659 
+##        ln_housing_median_age    ln_total_rooms_population 
+##                  0.170291604                 -0.578878811 
+## ln_total_bedrooms_population     ln_population_households 
+##                  0.464685556                 -0.210966960 
+##                ln_households 
+##                  0.080924952
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{t}\NormalTok{(svr_}\DecValTok{5}\OperatorTok{$}\NormalTok{coefs) }\OperatorTok{%*%}\StringTok{ }\NormalTok{svr_}\DecValTok{5}\OperatorTok{$}\NormalTok{SV}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      median_income median_income_2 median_income_3 ln_housing_median_age
+## [1,]      4.548788        4.134815        3.575148             0.7963854
+##      ln_total_rooms_population ln_total_bedrooms_population
+## [1,]                  1.431569                    0.7846614
+##      ln_population_households ln_households
+## [1,]                -1.570198      1.058001
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{5}\OperatorTok{$}\NormalTok{rho}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] -0.1878867
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{t}\NormalTok{(svr_}\DecValTok{9}\OperatorTok{$}\NormalTok{coefs) }\OperatorTok{%*%}\StringTok{ }\NormalTok{svr_}\DecValTok{9}\OperatorTok{$}\NormalTok{SV}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      median_income median_income_2 median_income_3 ln_housing_median_age
+## [1,]      5.250779        4.132941        2.862027             0.5703704
+##      ln_total_rooms_population ln_total_bedrooms_population
+## [1,]                  2.747747                       1.5572
+##      ln_population_households ln_households
+## [1,]                -2.292135      1.276058
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{9}\OperatorTok{$}\NormalTok{rho}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.05810638
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{t}\NormalTok{(svr_}\DecValTok{13}\OperatorTok{$}\NormalTok{coefs) }\OperatorTok{%*%}\StringTok{ }\NormalTok{svr_}\DecValTok{13}\OperatorTok{$}\NormalTok{SV}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      median_income median_income_2 median_income_3 ln_housing_median_age
+## [1,]      4.558325        3.538595        2.404104             0.8691997
+##      ln_total_rooms_population ln_total_bedrooms_population
+## [1,]                  1.994853                      1.17753
+##      ln_population_households ln_households
+## [1,]                -1.953529     0.9341405
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{svr_}\DecValTok{13}\OperatorTok{$}\NormalTok{rho}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.02083598
+\end{verbatim}
+
+La influencia de las variables en cada modelo es exactamente igual que
+el caso de los modelos de las Epsilon-SVRs.
+
+\hypertarget{otros-modelos-de-regresiuxf3n}{%
+\section{Otros modelos de
+Regresión}\label{otros-modelos-de-regresiuxf3n}}
+
+Aplicaremos otros algoritmos de regresión a nuestro conjunto de datos
+para comparar los resultados con los modelos de SVR.
+
+\hypertarget{regresiuxf3n-lineal-muxfaltiple}{%
+\subsection{Regresión lineal
+múltiple}\label{regresiuxf3n-lineal-muxfaltiple}}
+
+Recordamos que la regresión lineal múltiple es un método en el cual
+predecimos una variable dependiente o respuesta a partir de una
+combinación lineal de las variables independientes o explicativas.
+
+Entrenamos el modelo de regresión lineal múltiple con nuestro conjunto
+de entrenamiento.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{reg_lineal <-}\StringTok{ }\KeywordTok{lm}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{.,}
+               \DataTypeTok{data =}\NormalTok{ dt.train)}
+\KeywordTok{summary}\NormalTok{(reg_lineal)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## lm(formula = ln_median_house_value ~ ., data = dt.train)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -3.15125 -0.21334  0.00129  0.20587  2.65018 
+## 
+## Coefficients:
+##                              Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)                  10.96562    0.16348  67.077  < 2e-16 ***
+## median_income                 5.29216    0.20255  26.128  < 2e-16 ***
+## median_income_2              -1.01337    0.52020  -1.948   0.0514 .  
+## median_income_3              -1.71200    0.38404  -4.458 8.34e-06 ***
+## ln_housing_median_age         0.63618    0.02219  28.671  < 2e-16 ***
+## ln_total_rooms_population    -8.59352    0.18355 -46.819  < 2e-16 ***
+## ln_total_bedrooms_population  8.27702    0.25394  32.595  < 2e-16 ***
+## ln_population_households     -2.81372    0.17520 -16.060  < 2e-16 ***
+## ln_households                 0.36374    0.03314  10.977  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 0.3571 on 14560 degrees of freedom
+## Multiple R-squared:  0.6059, Adjusted R-squared:  0.6057 
+## F-statistic:  2798 on 8 and 14560 DF,  p-value: < 2.2e-16
+\end{verbatim}
+
+Vemos que las variables que influyen de forma positiva sobre el precio
+medio de las viviendas son: \texttt{median\_income},
+\texttt{ln\_housing\_median\_age},
+\texttt{ln\_total\_bedrooms\_population} y \texttt{ln\_households}; las
+otras variables influyen de forma negativa.
+
+A modo de ejemplo comentamos qué significa el coeficiente de la variable
+\texttt{median\_income}. El valor del coeficiente que nos da el modelo
+es 5.29216 y lo interpretamos como: un aumento de una unidad en
+\texttt{median\_income} hace que la variable
+\texttt{ln\_median\_house\_value} suba 5.29216 unidades. Vemos que la
+variable \texttt{median\_income\_2} es la única que no es significativa
+a un nivel de significación del 5\%.
+
+Con el conjunto de validación crearemos las predicciones con el modelo
+creado anteriormente y después calcularemos la raíz del error cuadrático
+medio (RMSE) y la utilizaremos como medida de precisión de nuestro
+modelo.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{reg_lineal_pred <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(reg_lineal, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_reg_lin <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ reg_lineal_pred, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{rmse_reg_lin}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3554993
+\end{verbatim}
+
+Nos sale un error muy parecido al mínimo error que tenemos de los
+modelos SVR.
+
+\hypertarget{knn-k-nearest-neighbors}{%
+\subsection{KNN (K-nearest Neighbors)}\label{knn-k-nearest-neighbors}}
+
+El método de K-Nearest Neighbors es otro método de regresión. El
+algoritmo reconoce patrones en los datos sin un aprendizaje específico,
+consiguiendo un criterio de agrupamiento de los datos a partir de un
+conjunto de entrenamiento.
+
+A continuación vamos a predecir nuestras observaciones, para más tarde
+calcular la raíz del error cuadrático medio.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{248}\NormalTok{)}
+\NormalTok{dt_knn <-}\StringTok{ }\NormalTok{FNN}\OperatorTok{::}\KeywordTok{knn.reg}\NormalTok{(}\DataTypeTok{train =}\NormalTok{ dt.train[,}\OperatorTok{-}\DecValTok{9}\NormalTok{], }\DataTypeTok{test =}\NormalTok{ dt.test[,}\OperatorTok{-}\DecValTok{9}\NormalTok{], }\DataTypeTok{y =}\NormalTok{ dt.train}\OperatorTok{$}\NormalTok{ln_median_house_value, }\DataTypeTok{k =} \DecValTok{10}\NormalTok{)}
+\NormalTok{rmse_knn <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ dt_knn}\OperatorTok{$}\NormalTok{pred, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{rmse_knn}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.351206
+\end{verbatim}
+
+El error que conseguimos es 0.351206, muy parecido a los otros que hemos
+conseguido.
+
+\hypertarget{regression-tree}{%
+\subsection{Regression Tree}\label{regression-tree}}
+
+Vamos a realizar un modelo basado en un árbol de regresión. Utilizaremos
+nuestro conjunto de entrenamiento para entrenar los datos, para más
+tarde predecir y calcular la raíz del error cuadrático medio.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{reg_tree <-}\StringTok{ }\KeywordTok{rpart}\NormalTok{(ln_median_house_value }\OperatorTok{~}\NormalTok{., }\DataTypeTok{data =}\NormalTok{ dt.train, }\DataTypeTok{method  =} \StringTok{"anova"}\NormalTok{)}
+\NormalTok{tree_prediction <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(reg_tree, }\DataTypeTok{newdata =}\NormalTok{ dt.test) }
+\NormalTok{rmse_tree <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ tree_prediction, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{rmse_tree}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4084926
+\end{verbatim}
+
+El error es bastante más grande que el resto, probablemente debido a que
+es un modelo muy simple.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{rpart.plot}\NormalTok{(reg_tree)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{SVM_regresion_files/figure-latex/unnamed-chunk-73-1.pdf}
+
+Con este plot vemos cómo nos ha quedado el árbol de regresión.
+
+\hypertarget{random-forest}{%
+\subsection{Random Forest}\label{random-forest}}
+
+Un solo árbol de regresión no es suficiente, ya que sufren de problemas
+de sesgo y varianza en las predicciones. Para poder mejorar tanto los
+problemas comentados y una mejor precisión, vamos a introducir el
+concepto de Random Forest. Random Forest es un método tipo ensemble que
+está formado por un grupo de modelos predictivos alcanzando una
+precisión y una estabilidad mejores. Los árboles sufren problemas de
+sesgo y varianza en las predicciones; Random Forest forma parte de los
+métodos de Bagging y éstos funcionan de la siguiente manera:
+
+\begin{itemize}
+\tightlist
+\item
+  Crear muchos subconjuntos de datos.
+\item
+  Construir múltiples modelos.
+\item
+  Combinar los modelos construidos.
+\end{itemize}
+
+Random Forest crea un grupo de modelos aparentemente débiles (múltiples
+árboles de decisión), para combinarlos y transformarlos en un modelo más
+potente.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{rf <-}\StringTok{ }\KeywordTok{randomForest}\NormalTok{(ln_median_house_value}\OperatorTok{~}\NormalTok{. , }\DataTypeTok{data =}\NormalTok{ dt.train, }\DataTypeTok{ntree =} \DecValTok{1000}\NormalTok{)}
+\NormalTok{rf_pred <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(rf, }\DataTypeTok{newdata =}\NormalTok{ dt.test)}
+\NormalTok{rmse_rf <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ rf_pred, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{rmse_rf}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3315596
+\end{verbatim}
+
+Con este algoritmo más sofisticado conseguimos el mejor error obtenido
+hasta el momento: 0.3315596.
+
+\hypertarget{ann}{%
+\subsection{ANN}\label{ann}}
+
+Para construir nuestras redes neuronales artificiales, hemos considerado
+los siguientes valores de los parámetros:
+
+\begin{itemize}
+\item
+  threshold = 1
+\item
+  err.fct = ``sse''
+\item
+  linear.output = TRUE, ya que se trata de regresión
+\item
+  learningrate = 0.1
+\item
+  act.fct = ``logistic''
+\end{itemize}
+
+El primero de los dos modelos que ejecutamos es con una capa de 3
+neuronas.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{284}\NormalTok{)}
+\NormalTok{ANN <-}\StringTok{ }\KeywordTok{neuralnet}\NormalTok{(ln_median_house_value}\OperatorTok{~}\NormalTok{. , }\DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{hidden =} \KeywordTok{c}\NormalTok{(}\DecValTok{3}\NormalTok{),}
+                 \DataTypeTok{threshold =} \DecValTok{1}\NormalTok{,}
+                 \DataTypeTok{err.fct=}\StringTok{"sse"}\NormalTok{,}
+                 \DataTypeTok{linear.output=}\OtherTok{TRUE}\NormalTok{,}
+                 \DataTypeTok{learningrate =} \FloatTok{0.1}\NormalTok{,}
+                 \DataTypeTok{act.fct =} \StringTok{"logistic"}\NormalTok{)}
+
+\NormalTok{ANN_pred <-}\StringTok{ }\KeywordTok{compute}\NormalTok{(ANN, dt.test[, }\DecValTok{-9}\NormalTok{])}\OperatorTok{$}\NormalTok{net.result}
+\NormalTok{rmse_ann_}\DecValTok{1}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ ANN_pred, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{rmse_ann_}\DecValTok{1}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.341986
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{plot}\NormalTok{(ANN)}
+\end{Highlighting}
+\end{Shaded}
+
+El segundo es con 3 capas de 5, 2 y 2 neurones respectivamente.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{set.seed}\NormalTok{(}\DecValTok{284}\NormalTok{)}
+\NormalTok{ANN <-}\StringTok{ }\KeywordTok{neuralnet}\NormalTok{(ln_median_house_value}\OperatorTok{~}\NormalTok{. , }\DataTypeTok{data =}\NormalTok{ dt.train, }
+                 \DataTypeTok{hidden =} \KeywordTok{c}\NormalTok{(}\DecValTok{5}\NormalTok{,}\DecValTok{2}\NormalTok{,}\DecValTok{2}\NormalTok{),}
+                 \DataTypeTok{threshold =} \DecValTok{1}\NormalTok{,}
+                 \DataTypeTok{err.fct=}\StringTok{"sse"}\NormalTok{,}
+                 \DataTypeTok{linear.output=}\OtherTok{TRUE}\NormalTok{,}
+                 \DataTypeTok{learningrate =} \FloatTok{0.1}\NormalTok{,}
+                 \DataTypeTok{act.fct =} \StringTok{"logistic"}\NormalTok{)}
+
+\NormalTok{ANN_pred <-}\StringTok{ }\KeywordTok{compute}\NormalTok{(ANN, dt.test[, }\DecValTok{-9}\NormalTok{])}\OperatorTok{$}\NormalTok{net.result}
+\NormalTok{rmse_ann_}\DecValTok{2}\NormalTok{ <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{MSE}\NormalTok{(}\DataTypeTok{y_pred =}\NormalTok{ ANN_pred, }\DataTypeTok{y_true =}\NormalTok{ dt.test}\OperatorTok{$}\NormalTok{ln_median_house_value))}
+\NormalTok{rmse_ann_}\DecValTok{2}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.3338819
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{plot}\NormalTok{(ANN)}
+\end{Highlighting}
+\end{Shaded}
+
+De los dos modelos, el que tiene menor error es el segundo con 3 capas
+de 5, 2 y 2 neuronas respectivamente.
+
+\hypertarget{conclusiuxf3n}{%
+\section{Conclusión}\label{conclusiuxf3n}}
+
+Reunimos todos los errores que obtenemos en cada uno de los algoritmos
+de regresión. En el caso de los SVR, cogemos el mejor de los modelos de
+Epsilon-SVR y, por el otro lado, el mejor de los de Nu-SVR. Los
+visualizamos en un tabla:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{resultados <-}\StringTok{ }\KeywordTok{data.frame}\NormalTok{(}\StringTok{"RMSE"}\NormalTok{ =}\StringTok{ }\KeywordTok{c}\NormalTok{(eps_reg[}\DecValTok{2}\NormalTok{], nu_reg[}\DecValTok{2}\NormalTok{], rmse_reg_lin, rmse_knn, rmse_tree, rmse_rf,}
+\NormalTok{                                    rmse_ann_}\DecValTok{2}\NormalTok{))}
+
+\KeywordTok{rownames}\NormalTok{(resultados) <-}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{"Epsilon-SVR"}\NormalTok{, }\StringTok{"Nu-SVR"}\NormalTok{, }\StringTok{"Regresión lineal múltiple", "}\NormalTok{K}\OperatorTok{-}\NormalTok{NN}\StringTok{", "}\NormalTok{Regression tree}\StringTok{",}
+\StringTok{                           "}\NormalTok{Random}\OperatorTok{-}\NormalTok{Forest}\StringTok{", "}\NormalTok{ANN}\StringTok{")}
+\StringTok{resultados}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##                                RMSE
+## Epsilon-SVR               0.3553593
+## Nu-SVR                    0.3551530
+## Regresión lineal múltiple 0.3554993
+## K-NN                      0.3512060
+## Regression tree           0.4084926
+## Random-Forest             0.3315596
+## ANN                       0.3338819
+\end{verbatim}
+
+Los dos mejores algoritmos que han cosechado un menor error en la
+predicción son Random-Forest (probablemente por ser un algoritmo mucho
+más sofisticado) y ANN. Realmente los modelos de SVR solamente han
+variado en el caso de kernel lineal, en los otros tipos de kernel el
+resultado se mantenía constante, cosa que nos hace sospechar de que esos
+modelos no están trabajando de la forma óptima que deberían. Recalcamos
+que tanto K-NN como la regresión lineal múltiple son métodos simples que
+han alcanzado un error similar que los modelos de SVR, siendo estos
+últimos unos algoritmos muchos más pesados y potentes.
+
+En definitiva, si nos ceñimos por el error de predicción los modelos que
+seleccionamos son el Random-Forest y el ANN con 3 capas de 5, 2 y 2
+neuronas respectivamente.
+
+\end{document}

@@ -1,0 +1,510 @@
+---
+title: "Reglas de asociación y detección de anomalías: Práctica final"
+author: "Jun De Wu"
+date: "20/05/2021"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  pdf_document:
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+linkcolor: red
+header-includes: \renewcommand{\contentsname}{Contenidos}
+citecolor: purple
+toccolor: blue
+urlcolor: blue
+---
+Empezaremos por cargar todos los paquetes que necesitaremos en el trabajo.
+
+```{r, warning=FALSE, message=FALSE}
+require(XML)
+require(arules)
+require(arulesViz)
+require(tidyverse)
+require(plyr)
+require(tidytext)
+require(tm)
+require(qdapRegex)
+require(splitstackshape)
+require(data.table)
+require(fastDummies)
+require(tidyr)
+require(ggcorrplot)
+require(GGally)
+require(factoextra)
+require(dbscan)
+require(mclust)
+```
+
+# Reglas de asociación: Recetas de cocina
+
+## Limpieza de los datos
+
+El archivo que tenemos está en formato `xml`, con lo cual lo leeremos con la función `xmlToList` del paquete `XML`. 
+
+```{r}
+raw_data <- xmlParse("recipeBaseCompulsory_clean.xml")
+xml_data <- xmlToList(raw_data)
+dataset <- ldply(xml_data, data.frame)
+```
+
+El archivo nos proporciona el título de las recetas, los pasos a seguir y los ingredientes, pero a la práctica solo necesitaremos los ingredientes para encontrar reglas de asociación y utilizaremos los títulos para filtrar las recetas que sean de pescado o picantes.
+
+Utilizaremos los paquetes `tidytext` y `tm` para hacer text mining de los datos y hacer limpieza. Empezaremos por quitar símbolos que no nos interese y todo el texto que haya después de una ",", ";" o "or" también eliminaremos. 
+
+```{r}
+dataset_1 <- dataset
+for (j in 1:ncol(dataset_1)){
+  dataset_1[,j] <- gsub("\\s*\\([^\\)]+\\)","",as.character(dataset_1[,j]))
+}
+
+for (i in 1:ncol(dataset_1)){
+  dataset_1[,i] <- gsub(",.*","",dataset_1[,i])
+  dataset_1[,i] <- gsub(";.*","",dataset_1[,i])
+  dataset_1[,i] <- gsub("or.*","",dataset_1[,i])
+}
+
+head(dataset_1)
+```
+
+Vemos que las columnas 1, 2 y 8 no contienen ingredientes, crearemos una nueva columna llamada `ingredientes` que juntará todos los ingredientes de una receta y usaremos como separación el texto " holaquetaladios ". Después, seleccionaremos las columnas 2 y 38 solamente ya que son el título de la receta y los ingredientes respectivamente.
+
+```{r}
+dataset_1$ingredientes <- apply(dataset_1[ , colnames(dataset)[-c(1,2,8)]], 1, paste, collapse =
+                                  " holaquetaladios " )
+dataset_1 <- dataset_1 %>%
+  select(c(2,38))
+head(dataset_1)
+```
+
+Transformaremos nuestro data frame al formato Corpus para realizar la limpieza de los textos. Para poder usar la función `VCorpus` necesitamos pasarle un data frame con dos columnas como fuente. Una vez tenemos construido el corpus de los ingredientes, pasamos los textos a minúsculas, quitaremos los números, las "stopwords", palabras que están en los ingredientes que no nos interesa, los signos de puntuación y los espacios en blanco sobrantes.
+
+```{r}
+dt_corpus <- data.frame(doc_id = dataset_1$TI, text = dataset_1$ingredientes)
+corpus <- VCorpus(DataframeSource(dt_corpus), readerControl = list(language = "en"))
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("en"))
+corpus <- tm_map(corpus, removeWords, c('ounce', 'skinless', 'boneless', 'halves', 'cold', 'sized',
+                   'cooked', 'unseasoned', 'colored', 'light', 'medium', 'thinly', 'coarsely', 'crushed',
+                   'whole', 'recipe', 'pitted', 'bing', 'unpeeled', 'diced', 'less', 'minced', 'chopped',
+                   'finely', 'softened', 'unsalted', 'prepared', 'cider', 'sliced','ground', 'roasted',
+                   'uncooked'))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+```
+
+Definimos la función `toSpace` para quitar los símbolos que queramos. Una vez realizada la limpieza, transformamos el corpus a un data frame.
+
+```{r}
+toSpace <- function(rx) tm::content_transformer(function(s) gsub(rx, ' ', s))
+corpus <- tm_map(corpus, toSpace('[-/?¿¡!-_–().]'))
+
+dt_corpus_1 <- data.frame(text = sapply(corpus, as.character), stringsAsFactors = FALSE)
+```
+
+Usamos la función `rm_nchar_words` del paquete `qdapRegex` para quitar todas las palabras que tengan menos de 3 letras. 
+
+```{r}
+dt_corpus_1$text <- rm_nchar_words(dt_corpus_1$text, "1,3")
+
+colnames(dt_corpus_1)[1] <- "ingredientes"
+
+head(dt_corpus_1)
+```
+
+De forma parecida a los ingredientes pero mucha menos limpieza, cogeremos los títulos de las recetas y pasaremos todas las palabras a minúsculas.
+
+```{r}
+title <- data.frame(doc_id = 1:nrow(dataset), text = dataset$TI)
+corpus_title <- VCorpus(DataframeSource(title), readerControl = list(language = "en"))
+
+corpus_title <- tm_map(corpus_title, content_transformer(tolower))
+
+title_1 <- data.frame(text = sapply(corpus_title, as.character), stringsAsFactors = FALSE)
+
+colnames(title_1)[1] <- "receta"
+
+head(title_1)
+```
+
+Juntamos los títulos con los ingredientes.
+
+```{r}
+tidy_data <- cbind(title_1, dt_corpus_1)
+
+tidy_data_1 <- tidy_data
+
+head(tidy_data_1)
+```
+
+Ahora hay que intentar reemplazar la separación que hemos usado (" holaquetaladios ") por "," y quitar estas comas. 
+
+```{r}
+for (j in 1:nrow(tidy_data_1)){
+  tidy_data_1[j,2] <- gsub("holaquetaladios",",",as.character(tidy_data_1[j,2]))
+  tidy_data_1[j,2] <- stripWhitespace(tidy_data_1[j,2])
+  trimws(tidy_data_1[j,2], "r")
+}
+
+for (j in 1:nrow(tidy_data_1)){
+  tidy_data_1[j,2] <- gsub(", ,",",",as.character(tidy_data_1[j,2]))
+}
+
+for (i in 1:nrow(tidy_data_1)){
+  tidy_data_1[i,2] <- gsub(", ,.*","",tidy_data_1[i,2])
+}
+
+head(tidy_data_1)
+```
+
+Además, hay títulos que están entre comillas y las tenemos que quitar.
+
+```{r}
+tidy_data_1$receta <- sapply(tidy_data_1$receta, function(x) gsub("\"", "", x))
+head(tidy_data_1)
+```
+
+Se nos pide más adelante encontrar reglas de asociación para todas las recetas de pescado y para todas las recetas picantes. Filtraremos por palabras claves relacionadas con recetas de pescado y recetas picantes.
+
+```{r}
+fish <- tidy_data_1 %>%
+  filter(grepl("fish", receta) | grepl("seafood", receta) | grepl("snapper", receta) | grepl("tuna", receta) |
+           grepl("bluefish", receta) | grepl("shark", receta) | grepl("croaker", receta) | 
+           grepl("flounder", receta) | grepl("trout", receta))
+
+spicy <- tidy_data_1 %>%
+  filter(grepl("spice", receta) | grepl("spicy", receta) | grepl("piquant", receta) | grepl("tangy", receta) |
+           grepl("hot", receta))
+
+head(fish)
+```
+
+```{r}
+head(spicy)
+```
+
+Nos interesa poner por filas cada ingrediente con su receta correspondiente.
+
+```{r}
+dt <- data.table(tidy_data_1)
+dt <- dt[ , list( ingredientes = unlist( strsplit( ingredientes , "," ) ) ) , by = receta]
+dt$ingredientes <- trimws(dt$ingredientes)
+
+dt <- dt %>%
+  mutate_all(as.factor)
+head(dt)
+```
+
+## Reglas de asociación con todas las recetas
+
+Vamos a escribir todos los ingrendientes en un archivo ".csv" para luego poder usar la función `read.transactions` para leer los ingredientes en forma de transacciones.
+
+```{r}
+dt_reglas <- dt
+dt_reglas$receta <- lapply(dt_reglas$receta, as.numeric)
+dt_reglas$receta <- unlist(dt_reglas$receta)
+
+write.csv(dt_reglas, file = "recetas.csv")
+
+trans <- read.transactions(file = "recetas.csv",
+                                   format = "single",
+                                   sep = ",",
+                                   header = TRUE,
+                                   cols = c("receta", "ingredientes"),
+                                   rm.duplicates = TRUE)
+
+summary(trans)
+arules::inspect(trans[1:3])
+```
+
+Pintamos los 25 ingredientes más frecuentes.
+
+```{r}
+itemFrequencyPlot(trans,topN = 25, type="absolute", main="Top 25 Item Frequency")
+```
+
+Vemos que la sal, azúcar y la manteca son los ingredientes que aparecen más. 
+
+Usamos el algoritmo "apriori" para encontrar reglas de asociación con un soporte mínimo de 0.001.
+
+```{r}
+reglas <- apriori(trans, parameter = list(supp = 0.001))
+arules::inspect(sort(reglas, by = "support", decreasing = T)[1:20])
+```
+
+Las 3 reglas con mayor soporte que aparecen son:
+
+* $\{eggs,vanilla\} \Longrightarrow \{sugar\}$
+
+* $\{\mbox{baking powder, purpose flour}\} \Longrightarrow \{salt\}$
+
+* $\{\mbox{milk,purpose flour}\} \Longrightarrow \{salt\}$
+
+## Reglas de asociación con recetas de pescado
+
+Vamos a realizar el mismo procedimiento que el caso general pero en el data frame `fish` tenemos las recetas filtradas.
+
+```{r}
+dt_fish <- data.table(fish)
+dt_fish <- dt_fish[ , list( ingredientes = unlist( strsplit( ingredientes , "," ) ) ) , by = receta]
+dt_fish$ingredientes <- trimws(dt_fish$ingredientes)
+
+dt_fish <- dt_fish %>%
+  mutate_all(as.factor)
+
+head(dt_fish)
+```
+
+```{r}
+dt_reglas_fish <- dt_fish
+dt_reglas_fish$receta <- lapply(dt_reglas_fish$receta, as.numeric)
+dt_reglas_fish$receta <- unlist(dt_reglas_fish$receta)
+
+write.csv(dt_reglas_fish, file = "recetas_pescado.csv")
+
+trans_fish <- read.transactions(file = "recetas_pescado.csv",
+                                   format = "single",
+                                   sep = ",",
+                                   header = TRUE,
+                                   cols = c("receta", "ingredientes"),
+                                   rm.duplicates = TRUE)
+
+summary(trans_fish)
+arules::inspect(trans_fish[1:3])
+```
+
+```{r}
+itemFrequencyPlot(trans_fish,topN = 25, type="absolute", main="Top 25 Item Frequency")
+```
+
+Los ingredientes que son más frecuentes en este caso son la manteca, la sal, la cebolla, etc. 
+
+```{r}
+reglas_fish <- apriori(trans_fish, parameter = list(supp = 0.03))
+arules::inspect(sort(reglas_fish, by = "support", decreasing = T)[1:20])
+```
+
+Las reglas de asociación con mayor soporte son:
+
+* $\{milk\} \Longrightarrow \{butter\}$
+
+* $\{\mbox{bell pepper}\} \Longrightarrow \{\mbox{cloves garlic}\}$
+
+* $\{leaf\} \Longrightarrow \{onion\}$
+
+Parece que las recetas de pescado que lleven leche también suelen llevan manteca, las que lleven pimiento morrón llevan dientes de ajo y las que lleven hojas llevan cebolla. Por desconocimiento del campo de la cocina, no sabemos con consistencia si las reglas que hemos obtenido tienen algún sentido.
+
+## Reglas de asociación con las recetas picantes
+
+El procedimiento es exactamente idéntico que las recetas de pescado.
+
+```{r}
+dt_spicy <- data.table(spicy)
+dt_spicy <- dt_spicy[ , list( ingredientes = unlist( strsplit( ingredientes , "," ) ) ) , by = receta]
+dt_spicy$ingredientes <- trimws(dt_spicy$ingredientes)
+
+dt_spicy <- dt_spicy %>%
+  mutate_all(as.factor)
+```
+
+```{r}
+dt_reglas_spicy <- dt_spicy
+dt_reglas_spicy$receta <- lapply(dt_reglas_spicy$receta, as.numeric)
+dt_reglas_spicy$receta <- unlist(dt_reglas_spicy$receta)
+
+write.csv(dt_reglas_spicy, file = "recetas_picantes.csv")
+
+trans_spicy <- read.transactions(file = "recetas_picantes.csv",
+                                   format = "single",
+                                   sep = ",",
+                                   header = TRUE,
+                                   cols = c("receta", "ingredientes"),
+                                   rm.duplicates = TRUE)
+
+summary(trans_spicy)
+arules::inspect(trans_spicy[1:3])
+```
+
+```{r}
+itemFrequencyPlot(trans_spicy,topN = 25, type="absolute", main="Top 25 Item Frequency")
+```
+
+En este caso la sal, el azúcar y el agua son los ingredientes más frecuentes.
+
+```{r}
+reglas_spicy <- apriori(trans_spicy, parameter = list(supp = 0.03))
+arules::inspect(sort(reglas_spicy, by = "support", decreasing = T)[1:20])
+```
+
+Las reglas de asociación con mayor soporte son:
+
+* $\{flour\} \Longrightarrow \{salt\}$
+
+* $\{\mbox{baking powder}\} \Longrightarrow \{\mbox{sugar}\}$
+
+* $\{eggs\} \Longrightarrow \{sugar\}$
+
+Igual que las recetas de pescado, por desconocimiento no podemos asegurar que estas reglas de asociación tengan algún sentido real.
+
+# Detección de anomalías
+
+En este apartado vamos a emplear los métodos de DBSCAN y Expectation Maximization para detectar puntos outliers dentro de nuestro conjunto de datos. El data set en cuestión se trata de datos relacionados con el cáncer de mama en Wisconsin, USA. Procedemos a leer los datos y asignarles los nombres correspondientes a cada columna.
+
+```{r}
+bc <- read.csv("breast-cancer-wisconsin.data", header = FALSE, sep = ",")
+
+colnames(bc) <- c("ID", "Clump_thickness", "Uniform_cell_size", "Uniform_cell_shape", 
+                 "Marginal_adhesion", "Single_epithelial_cell_size", "Bare_nuclei", 
+                 "Bland_chromatin", "Normal_nucleoli", "Mitoses", "Class")
+anyNA(bc)
+```
+
+El data frame no tiene valores NA, pero sabemos que en la columna `Bare_nuclei` hay valores que no se han podido recolectar y se les asigna un "?". 
+
+```{r}
+bc <- bc %>%
+  filter(Bare_nuclei != "?")
+
+bc_1 <- bc %>%
+  select(-1)
+```
+
+```{r}
+glimpse(bc_1)
+```
+
+La variable `Class` indica el tipo de cáncer que es: 2 si es benigno y 4 si es maligno.
+
+```{r}
+bc_1$Bare_nuclei <- as.integer(bc$Bare_nuclei)
+```
+
+Vemos que todas las variables son numéricas ahora mismo, ya que hemos pasado la variable `Bare_nuclei` a una variable integer.
+
+```{r}
+correlation <- cor(bc_1, method = "spearman")
+
+ggcorrplot(correlation, lab = TRUE, lab_size = 1.7, legend.title = "Correlation", 
+           lab_col = "blue4", colors = c("yellow4", "white", "green4")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(x = "", y = "", title = "Correlation Matrix")
+```
+
+Vemos que muchas variables están correlacionadas. Seguimos con este estudio con el siguiente gráfico.
+
+```{r, warning=FALSE, message=FALSE}
+bc_1 %>%
+  ggpairs(columns = c("Clump_thickness", "Uniform_cell_size", "Uniform_cell_shape", 
+                 "Marginal_adhesion", "Single_epithelial_cell_size", "Bare_nuclei", 
+                 "Bland_chromatin", "Normal_nucleoli", "Mitoses", "Class"),
+          columnLabels = c("Clump_thickness", "Uniform_cell_size", "Uniform_cell_shape", 
+                 "Marginal_adhesion", "Single_epithelial_cell_size", "Bare_nuclei", 
+                 "Bland_chromatin", "Normal_nucleoli", "Mitoses", "Class"))
+```
+
+No se puede observar si hay puntos que puedan ser considerados outliers. Para ello, vamos a realizar un Análisis de Componentes Principales para poder graficar los puntos en un plano. 
+
+```{r}
+bc_1 <- bc_1 %>%
+  dummy_cols(select_columns = "Class") %>%
+  select(-c("Class"))
+```
+
+```{r}
+distance_matrix = as.matrix(dist(scale(bc_1)))
+pca <- prcomp(distance_matrix)
+
+fviz_eig(pca, addlabels=TRUE, hjust = -0.3) + 
+  ylim(0, 100) + 
+  labs(title = "Variances - PCA", 
+       x = "Principal Components", y = "% of variances") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Vemos que la primera componente explica un 93.7% de la varianza y las dos primeras componentes explican un 97.1% de la varianza, lo que supone un porcentaje muy decente.
+
+```{r}
+pca_data <- data.table(pca$x[, 1:2])
+pca_data[, id := bc$ID]
+pca_data[, class := bc$Class]
+pca_data[, row := 1:nrow(bc)]
+head(pca_data)
+```
+
+Pintamos los puntos con las dos primeras componentes.
+
+```{r}
+ggplot(pca_data, aes(x = PC1, y = PC2, colour = as.factor(class))) +
+  geom_point(size = 5,  alpha = 0.5) +
+  geom_text(aes(label = row), check_overlap = TRUE) +
+  scale_color_manual("Tipo de Cáncer", values = c("2" = "red4", "4" = "blue4")) +
+  theme_linedraw()
+```
+
+Podríamos deducir que los puntos de las filas 128, 159, 674 y los puntos que están arriba a la derecha son puntos que están alejados de los dos cúmulos de puntos que nos encontramos en el gráfico. 
+
+## DBSCAN
+ 
+Su nombre en inglés significa Density-based spatial clustering of applications with noise y es un algoritmo de clustering de datos. DBSCAN necesita dos parámetros para empezar a funcionar:
+
+* $\epsilon$ como un parámetro especificando el radio de un vecindario respecto a un punto.
+
+* `minPts` es el número mínimo de vecinos necesarios para considerar un punto como un core point y los puntos que no cumplen con el requisito son considerados outliers.
+
+Consideraremos un radio $\epsilon = 2$ y minPts de 3.
+
+```{r}
+dbscan(scale(bc_1), eps = 2, minPts = 3)
+which(dbscan(scale(bc_1), eps = 2, minPts = 3)$cluster == 0)
+```
+
+Hay un total de 59 puntos que están en el cluster 0 (puntos que son considerados outliers). Graficamos los clusters.
+
+```{r}
+pca_data[, DClusters := dbscan(scale(bc_1), eps = 2, minPts = 3)$cluster]
+pca_data
+ggplot(pca_data, aes(x = PC1, y = PC2)) +
+  geom_point(aes(colour = factor(DClusters)), size = 5, alpha = 0.5)  +
+  geom_text(aes(label = row), check_overlap = TRUE) +
+  theme_linedraw()
+```
+
+```{r}
+bc$Class[which(dbscan(scale(bc_1), eps = 2, minPts = 3)$cluster == 0)]
+```
+
+Vemos que la mayoría de los outliers que salen son de la clase maligna, son casos que tiene sentido que sean clasificados como outliers.
+
+## Expectation Maximization
+
+Esta algoritmo de clustering no supervisado trata de encontrar "subespacios similares" basado en su orientación y varianza.
+
+```{r}
+EM <- Mclust(scale(bc_1), G = 5)
+EM$classification
+pca_data[, EMClusters := EM$classification]
+head(pca_data)
+```
+
+```{r}
+ggplot(pca_data, aes(x = PC1, y = PC2)) +
+  geom_point(aes(colour = factor(EMClusters)), size = 5, alpha = 0.5) +
+  scale_color_manual("Clusters", values = c("1" = "yellow4", "2" = "green4", "3" = "blue4", 
+                                            "4" = "red4")) +
+  geom_text(aes(label = row), check_overlap = TRUE) +
+  theme_linedraw()
+```
+
+Vemos ahora que el cluster que puede ser considerado cluster de outliers es el 2. 
+
+```{r}
+which(EM$classification == 2)
+bc[which(EM$classification == 2), 11]
+```
+
+Como pasa con el algoritmo de DBSCAN, todos los puntos son considerados son observaciones clasificadas como cáncer maligno.

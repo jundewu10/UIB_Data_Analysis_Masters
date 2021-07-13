@@ -1,0 +1,1137 @@
+---
+title: "SVM: Práctica de clasificación"
+author: "Jun De Wu"
+date: "12/06/2021"
+output:
+  pdf_document:
+    toc: yes
+    number_sections: yes
+  html_document:
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+linkcolor: red
+header-includes: \renewcommand{\contentsname}{Contenidos}
+citecolor: purple
+toccolor: blue
+urlcolor: blue
+---
+
+```{r, warning=FALSE, message=FALSE}
+require(tidyverse)
+require(ggcorrplot)
+require(fastDummies)
+require(unbalanced)
+require(caTools)
+require(neuralnet)
+require(caret)
+require(moments)
+require(e1071)
+require(kernlab)
+require(class)
+require(rpart)
+require(MASS)
+require(randomForest)
+```
+
+# Introducción
+
+El data set que tratamos es un conjunto de datos relacionado con campañas directas de marketing de una institución bancaria portuguesa. Las campañas de marketing se basaban en llamadas telefónicas. Usualmente, se requiere más de una llamada con el mismo cliente para saber si el producto (depósito bancario a plazo) sería suscrito o no. El objetivo es predecir, con todas las variables y observaciones que disponemos, los clientes potenciales que se suscriben al depósito a plazo.
+
+# Exploración y limpieza de los datos
+
+```{r, warning=FALSE, message=FALSE}
+bank <- read_csv2("bank-full.csv", col_names = TRUE)
+glimpse(bank)
+```
+
+Las variables que tenemos sobre los clientes son:
+
+* `age`: Edad 
+
+* `job`: Trabajo 
+
+* `marital`: Estado civil
+
+* `education`: Nivel de educación
+
+* `default`: Impago
+
+* `balance`: Saldo medio anual en la cuenta
+
+* `housing`: Préstamo de vivienda
+
+* `loan`: Préstamos personales
+
+Las variables relacionas con la última llamada de la campaña actual:
+
+* `contact`: Vía de comunicación
+
+* `day`: Día del mes de la última llamada
+
+* `month`: Mes del año de la última llamada
+
+* `duration`: Duración de la última llamada en segundos
+
+Las variables relacionadas con otros atributos:
+
+* `campaign`: Número de llamadas realizadas durante esta campaña para este cliente
+
+* `pdays`: Número de días que han pasado desde que el cliente recibiera la última llamada de la anterior campaña (-1 significa que el cliente no ha sido contactado anteriormente)
+
+* `previous`: Número de llamadas realizadas antes de esta campaña para este cliente
+
+* `poutcome`: Resultado de la anterior campaña de marketing
+
+La variable objetivo:
+
+* `y`: Indica si el cliente se ha suscrito a un depósito a plazo
+
+Las variables que no son numéricas son factor y están en formato character, así que tenemos que transformarlas.
+
+```{r}
+bank[sapply(bank, is.character)] <- lapply(bank[sapply(bank, is.character)], 
+                                       as.factor)
+summary(bank)
+```
+
+```{r}
+bank_correlacion <- bank %>%
+  mutate(default = as.integer(recode(default, "no" = 0, "yes" = 1)), housing = 
+           as.integer(recode(housing, "no" = 0, "yes" = 1)), loan = 
+           as.integer(recode(loan, "no" = 0, "yes" = 1)), 
+         y = as.integer(recode(y, "no" = 0, "yes" = 1)))
+
+correlacion <- cor(bank_correlacion[, sapply(bank_correlacion, is.numeric)], 
+                   method = "spearman")
+
+ggcorrplot(correlacion, lab = TRUE, lab_size = 1.7, legend.title = "Correlación", 
+           lab_col = "blue4", colors = c("yellow4", "white", "green4")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(x = "", y = "", title = "Matriz de correlación")
+```
+
+Hay una correlación de 0.99 entre las variables `previous` y `pdays`, tienen una relación prácticamente lineal. Más tarde, junto con otros métodos que aplicaremos para estudiar las variables, decidiremos cuál de las dos quitar o quitar las dos.
+
+## Variables cualitativas
+
+Vamos a ir recorriendo cada variable cualitativa y realizar un diagrama de barras para reflejar la distribución de cada variable filtrando por la variable objetivo.
+
+### Variable `job`
+
+```{r}
+levels(bank$job)
+```
+
+Tenemos 12 niveles de la variable `job`, demasiadas para poder realizar la visualización como para posteriormente aplicar el algoritmo de ANN. Lo que haremos será agrupar los trabajos por similitud. Empezamos por agrupar en una nueva categoría "Self-employed" los trabajos "admin.", "entrepreneur", "management" y "self-employed".
+
+```{r}
+bank$job <- gsub('^admin.', 'Self_employed', bank$job)
+bank$job <- gsub('^entrepreneur', 'Self_employed', bank$job)
+bank$job <- gsub('^management', 'Self_employed', bank$job)
+bank$job <- gsub('^self-employed', 'Self_employed', bank$job)
+```
+
+Continuamos por la segunda categoría "Services" que incluiría los trabajos "blue-collar", "housemaid", "services" y "technician".
+
+```{r}
+bank$job <- gsub('^blue-collar', 'Services', bank$job)
+bank$job <- gsub('^housemaid', 'Services', bank$job)
+bank$job <- gsub('^services', 'Services', bank$job)
+bank$job <- gsub('^technician', 'Services', bank$job)
+```
+
+La última categoría es "No-workers/Unknown" que incluiría los trabajos "retired", "student" y "unemployed".
+
+```{r}
+bank$job <- gsub('^retired', 'No_workers', bank$job)
+bank$job <- gsub('^student', 'No_workers', bank$job)
+bank$job <- gsub('^unemployed', 'No_workers', bank$job)
+```
+
+```{r}
+bank$job <- as.factor(bank$job)
+summary(bank$job)
+```
+
+Dejamos la categoría "unknown" porque contiene pocas observaciones y, más adelante, cuando realicemos los modelos de redes neuronales artificiales las quitaremos. 
+
+```{r}
+bank_1 <- bank
+```
+
+Ahora que hemos agrupado los 12 niveles que tenía originalmente la variable, vamos a visualizar con un histograma los datos filtrando por si están suscritos o no al depósito a corto plazo.
+
+```{r}
+bank %>%
+  ggplot(aes(x = job, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Trabajo", y = "Frecuencia", title = "Trabajo") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Observamos que, por lo desbalanceado que está el data set, hay un gran número de los entrevistados que no se suscriben. Parece que los perfiles de trabajadores que más se suscriben son los del sector servicio y los que son sus propios jefes.
+
+A continuación, quitamos los entrevistados que no sabemos que ocupación tienen.
+
+```{r}
+bank_1 <- bank_1 %>%
+  filter(bank_1$job != "unknown") %>%
+  droplevels()
+```
+
+### Variable `marital`
+
+```{r}
+summary(bank$marital)
+```
+
+Vemos que hay 5,207 personas divorciadas, 27,214 casadas y 12,790 solteras. La categoría que predomina en la variable `marital` es la de casados.
+
+```{r}
+bank %>%
+  ggplot(aes(x = marital, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Estado civil", y = "Frecuencia", title = "Estado civil") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Como se podía prever, en números globales los casados son los que más se suscriben, pero los solteros que se suscriben son los que tienen mayor ratio respecto al total de los solteros.
+
+### Variable `education`
+
+```{r}
+summary(bank$education)
+```
+
+Hay 6,851 que tienen la educación primaria, 23,202 que tienen la educación secundaria, 13,301 que tienen la educación terciaria y 1,857 que desconocemos su nivel educativo. Estos 1,857 los quitaremos también, como pasó con la variable `job`.
+
+```{r}
+bank %>%
+  ggplot(aes(x = education, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Nivel de educación", y = "Frecuencia", title = "Nivel de eduación") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Los que más se suscriben en términos absolutos son los que tienen educación secundaria, pero los que se suscriben teniendo la educación terciaria son los que tienen mejor ratio de suscripción respecto al total de la categoría.
+
+Quitamos los que desconocemos su nivel de educación de nuestro data set, para más tarde realizar los modelos de redes neuronales artificiales.
+
+```{r}
+bank_1 <- bank_1 %>%
+  filter(bank_1$education != "unknown") %>%
+  droplevels()
+```
+
+### Variable `default`
+
+```{r}
+summary(bank$default)
+```
+
+La mayoría de los entrevistados no tienen impagos, una parte ínfima tiene algún impago en su cuenta.
+
+```{r}
+bank %>%
+  ggplot(aes(x = default, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Impago", y = "Frecuencia", title = "Impago") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Aquí se ve que los que sí tienen impago no se suscriben (un 0.1% del total se suscriben, un número despreciable) y el 11.6% del total se suscriben sin tener impagos.
+
+### Variable `housing`
+
+```{r}
+summary(bank$housing)
+```
+
+Más de la mitad tienen préstamos de vivienda, algo lógico teniendo en cuenta el rango de edad, que luego veremos, en el cual se mueven los entrevistados. 
+
+```{r}
+bank %>%
+  ggplot(aes(x = housing, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Préstamo de vivienda", y = "Frecuencia", title = "Préstamo de vivienda") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Seguramente por tener una menor carga económica al carecer de préstamos de vivienda, los que más se suscriben son los que no tienen estos préstamos.
+
+### Variable `loan`
+
+```{r}
+summary(bank$loan)
+```
+
+Aquí cambia el asunto, la mayoría no tienen préstamos personales.
+
+```{r}
+bank %>%
+  ggplot(aes(x = loan, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Préstamo personal", y = "Frecuencia", title = "Préstamo personal") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Como es obvio, quienes no tienen préstamos personales (deudas) tienen más flexibilidad para participar en este tipo de inversiones.
+
+### Variable `contact`
+
+```{r}
+summary(bank$contact)
+```
+
+Tenemos que un 28.8% de los datos son desconocidos, con lo cual podemos creer que esta variable no nos puede aportar suficiente información para nuestros modelos.
+
+```{r}
+bank %>%
+  ggplot(aes(x = contact, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Vía de comunicación", y = "Frecuencia", title = "Vía de comunicación") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+La gran mayoría de los contactos se producen vía teléfono móvil, y también tienen el mayor porcentaje de suscripciones. Al tener tantos valores desconocidos, descartaremos esta variable.
+
+```{r}
+bank_1 <- bank_1 %>%
+  dplyr::select(-c("contact"))
+```
+
+### Variable `month`
+
+```{r}
+summary(bank$month)
+```
+
+Esta variable hace referencia al mes del año de la última llamada.
+
+```{r}
+bank %>%
+  ggplot(aes(x = month, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Mes de la última llamada", y = "Frecuencia", title = "Mes de la última llamada") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Vemos que los meses donde más se han realizado las últimas llamadas son mayo, junio, julio y agosto, correspondiendo los meses de verano (exceptuando mayo). 
+
+### Variable `poutcome`
+
+```{r}
+summary(bank$poutcome)
+```
+
+La mayoría de los datos son desconocidos.
+
+```{r}
+bank %>%
+  ggplot(aes(x = poutcome, fill = y, label =
+               scales::percent(prop.table(stat(count))))) + 
+  geom_bar(position = "dodge", alpha = 0.8) +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) +
+  scale_fill_manual("Suscripción", values = c("no" = "skyblue4",
+                                         "yes" = "forestgreen")) +
+  labs(x = "Resultados de la anterior campaña", y = "Frecuencia", 
+       title = "Resultados de la anterior campaña") +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_classic()
+```
+
+Vemos que un 81.75% de los datos son desconocidos, con lo cual descartaremos esta variable.
+
+```{r}
+bank_1 <- bank_1 %>%
+  dplyr::select(-c("poutcome"))
+```
+
+### Variable `y`
+
+```{r}
+summary(bank$y)
+```
+
+Hay 39,922 personas que no están suscritas y solamente 5,289 que sí, teniendo un data set totalmente desbalanceado respecto a esta variable (es nuestra variable objetivo).
+
+```{r}
+bank %>%
+  ggplot(aes(x = y, label = scales::percent(prop.table(stat(count))))) + 
+  geom_bar(fill = c("skyblue4", "forestgreen"), alpha = 0.8) + 
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5,
+              hjust = -0.08,
+              size = 2) +
+  labs(x = "Tipo de cliente", y = "Frecuencia", title = "Estado de suscripción") +
+  coord_flip() + 
+  theme_classic()
+```
+
+Al estar tan desbalanceado, antes de realizar los modelos de redes neuronales artificiales aplicaremos alguna técnica para ajustar conjuntos de datos desbalanceados.
+
+## Variables cuantitativas
+
+### Variable `age`
+
+```{r}
+summary(bank$age)
+```
+
+La media de edad de los encuestados es de 41 años, los encuestados tienen un perfil de persona estable. La persona más mayor que se ha entrevistado tiene 95 años, mientras que la persona más joven tiene 18 años.
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = age, fill = y)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Suscripción", values = c("no" = "gold4",
+                                           "yes" = "red4")) +
+  labs(x = "Edad", y = "Frecuencia", 
+       title = "Distribución de la edad") +
+  theme_classic()
+```
+
+Este histograma nos muestra la distribución de los encuestados por edad, filtrado por la suscripción.
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = y, y = age, color = y)) + 
+  geom_boxplot(width = 0.7, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Suscripción", values = 
+                       c("green4", "blue4")) +
+  theme_linedraw() +
+  labs(x = "Suscripción", y = "Edad") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Con este boxplot vemos que la media y la mediana de edad de los dos grupos son parecidas. Decidimos quitar los outliers que están por encima de los 75 años ya que suelen ser personas mayores y pueden comportarse diferente que el resto de los encuestados.
+
+```{r}
+bank_1 <- bank_1 %>%
+  filter(bank_1$age < 75)
+```
+
+### Variable `balance`
+
+```{r}
+summary(bank$balance)
+```
+
+Se puede ver que la media del saldo anual medio en la cuenta es de 1362, un número no muy alto y explica el por qué del rechazo de mucha gente a suscribirse. Los casos extremos son -8,019 por la parte baja, mientras que alguien tiene 102,127 en su cuenta bancaria.
+
+```{r, warning=FALSE, message=FALSE}
+bank %>%
+  ggplot(aes(x = balance, fill = y)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Suscripción", values = c("no" = "gold4",
+                                           "yes" = "red4")) +
+  labs(x = "Saldo", y = "Frecuencia", 
+       title = "Distribución del saldo") +
+  theme_classic()
+```
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = y, y = balance, color = y)) + 
+  geom_boxplot(width = 0.7, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Suscripción", values = 
+                       c("green4", "blue4")) +
+  theme_linedraw() +
+  labs(x = "Suscripción", y = "Saldo") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Aquí tenemos un gran número de outliers para ambos casos. Decidimos quitar los que tienen saldo mayor o igual que 25,000 porque no son representativos.
+
+```{r}
+bank_1 <- bank_1 %>%
+  filter(bank_1$balance < 25000)
+```
+
+### Variable `day`
+
+```{r}
+summary(bank$day)
+```
+
+La mayoría de las llamadas se realizan sobre el ecuador del mes.
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = day, fill = y)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Suscripción", values = c("no" = "gold4",
+                                           "yes" = "red4")) +
+  labs(x = "Edad", y = "Frecuencia", 
+       title = "Distribución del día de la última entrevista") +
+  theme_classic()
+```
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = y, y = day, color = y)) + 
+  geom_boxplot(width = 0.7, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Suscripción", values = 
+                       c("green4", "blue4")) +
+  theme_linedraw() +
+  labs(x = "Suscripción", y = "Día de la última entrevista") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+La media y la mediana de las dos clases se parecen muchísimo, sin ninguna presencia de outliers en ambos casos.
+
+### Variable `duration`
+
+```{r}
+summary(bank$duration)
+```
+
+La duración de la llamada puede ser determinante en la decisión del cliente. La media en segundos de las llamadas es de 258.2 segundos, mientras que la llamada más longeva ha durado 4918 segundos y la más corta 0 segundos (sin contestar). 
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = duration, fill = y)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Suscripción", values = c("no" = "gold4",
+                                           "yes" = "red4")) +
+  labs(x = "Edad", y = "Frecuencia", 
+       title = "Distribución de la duración de la entrevista") +
+  theme_classic()
+```
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = y, y = duration, color = y)) + 
+  geom_boxplot(width = 0.7, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Suscripción", values = 
+                       c("green4", "blue4")) +
+  theme_linedraw() +
+  labs(x = "Suscripción", y = "Duración de la entrevista") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Vemos que la media y la mediana de los segundos de la llamda de los que sí se suscriben son más altas que los que no se suscriben. Hay también muchos outliers, pero quitaremos el único que está por encima de los 4,000 segundos de llamada.
+
+```{r}
+bank_1 <- bank_1 %>%
+  filter(bank_1$duration < 4000)
+```
+
+### Variable `campaign`
+
+```{r}
+summary(bank$campaign)
+```
+
+De media se ha realizado 2.764 llamadas a los clientes en esta campaña. El máximo es 63 y el mínimo es 1.
+
+```{r, warning=FALSE, message=FALSE}
+bank %>%
+  ggplot(aes(x = campaign, fill = y)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Suscripción", values = c("no" = "gold4",
+                                           "yes" = "red4")) +
+  labs(x = "Edad", y = "Frecuencia", 
+       title = "Distribución de las llamadas de esta campaña") +
+  theme_classic()
+```
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = y, y = campaign, color = y)) + 
+  geom_boxplot(width = 0.7, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Suscripción", values = 
+                       c("green4", "blue4")) +
+  theme_linedraw() +
+  labs(x = "Suscripción", y = "Número de llamadas esta campaña") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Aquí hay un montón de outliers. Prácticamente todas las personas que reciben más 5 llamadas puede considerarse outlier ya que no es usual que se llame tantas veces para ofrecer un producto. Quitaremos todas las observaciones que se han llamado más de 5 veces.
+
+```{r}
+bank_1 <- bank_1 %>%
+  filter(bank_1$campaign <= 5)
+```
+
+### Variable `pday`
+
+```{r}
+bank_pday <- bank %>%
+  filter(pdays != "-1")
+summary(bank_pday$pdays)
+table(bank$pdays == "-1")
+```
+
+Vemos que la gran mayoría de los clientes no han sido contactados anteriormente. Lo que hemos hecho es ver, de los clientes que sí habían sido contactados anteriormente, los cuartiles y el mínimo y el máximo. La media es de 224 días, siendo el mínimo 1 dia (contactar al día siguiente de la última llamada) y el máximo 871 días.
+
+```{r, warning=FALSE, message=FALSE}
+bank %>%
+  ggplot(aes(x = pdays, fill = y)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Suscripción", values = c("no" = "gold4",
+                                           "yes" = "red4")) +
+  labs(x = "Edad", y = "Frecuencia", 
+       title = "Distribución de los días desde la última llamada de la anterior campaña") +
+  theme_classic()
+```
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = y, y = pdays, color = y)) + 
+  geom_boxplot(width = 0.7, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Suscripción", values = 
+                       c("green4", "blue4")) +
+  theme_linedraw() +
+  labs(x = "Suscripción", y = "Días desde la última llamada de la anterior campaña") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Como dijimos antes, la alta presencia de outliers son clientes que sí habían sido contactados anteriormente, mientras que la gran mayoría se sitúan en -1 ya que no han sido contactados.
+
+### Variable `previous`
+
+```{r}
+summary(bank$previous)
+```
+
+De media solo se ha llamado menos de una vez a los clientes en campañas anteriores. Quiere decir que la mayoría de los clientes que se llama en esta campaña no han recibido llamadas en la anterior campaña. 
+
+```{r, warning=FALSE, message=FALSE}
+bank %>%
+  ggplot(aes(x = previous, fill = y)) +
+  geom_histogram(position = "dodge", alpha = 0.8) +
+  scale_fill_manual("Suscripción", values = c("no" = "gold4",
+                                           "yes" = "red4")) +
+  labs(x = "Edad", y = "Frecuencia", 
+       title = "Distribución de las llamadas anteriores a esta campaña") +
+  theme_classic()
+```
+
+```{r, message=FALSE, warning=FALSE}
+bank %>%
+  ggplot(aes(x = y, y = previous, color = y)) + 
+  geom_boxplot(width = 0.7, fill = "slategray1", outlier.colour = "black", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  scale_color_manual("Suscripción", values = 
+                       c("green4", "blue4")) +
+  theme_linedraw() +
+  labs(x = "Suscripción", y = "Número de llamadas antes de esta campaña") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+Aún sabiendo que hay tantísimos outliers, no podemos quitarlos ya que los que sí han recibido llamadas en la anterior campaña nos puede proporcionar información importante. Quitaremos el único outlier que ha recibido más de 100 llamadas en la campaña anterior.
+
+```{r}
+bank_1 <- bank_1 %>%
+  filter(bank_1$previous < 100)
+```
+
+## Asimetría en las variables
+
+Vamos a utilizar la función `skewness` del paquete `moments` para estudiar el coeficiente de asimetría de cada una de las variables que tenemos.
+
+```{r}
+bank_skew <- as.data.frame(bank)
+```
+
+```{r}
+skewedVars<- NA
+
+for(i in names(bank_skew)){
+   if(is.numeric(bank_skew[,i])){
+     if(i != "y"){
+       # Enters this block if variable is non-categorical
+       skewVal <- skewness(bank_skew[,i])
+       print(paste(i, skewVal, sep = ": "))
+       if(abs(skewVal) > 0.5){
+         skewedVars <- c(skewedVars, i)
+       }
+     }
+   }
+}
+skewedVars
+```
+
+Vemos que las variable `balance`, `duration`, `campaign`, `pdays` y `previous` son muy asimétricas ya que su valor absoluto es mayor que 1. Quitaremos la variable `previous` ya que su valor es excesivamente grande y los datos son totalmente asimétricos. Podríamos pensar en quitar también `balance` pero esta variable representa el saldo medio anual de nuestro clientes y es una variable altamente importante en nuestro estudio. Observamos también que hay variables que podemos excluir para nuestro estudio. La variable que quitaremos es `pdays` ya que la mayoría de los clientes no han sido contactados anteriormente y supone unos datos totalmente desbalanceados.
+
+```{r}
+bank_1 <- bank_1 %>%
+  dplyr::select(-c("pdays", "previous"))
+summary(bank_1)
+```
+
+# SVM 
+
+## SVM con kernel lineal
+
+Primero de todos, vamos a pasar las variables categóricas a variables dummy.
+
+```{r}
+bank_2 <- bank_1 %>%
+  mutate(y = ifelse(y == "no", 0, 1)) %>%
+  dummy_cols(select_columns = c("job", "marital", "education", "default", "housing", "loan", "month")) %>%
+  dplyr::select(-c("job", "marital", "education", "default", "housing", "loan", "month"))
+
+bank_2 <- bank_2[, c(1:5, 7:33, 6)]
+glimpse(bank_2)
+```
+
+A continuación, definiremos la función de normalización max-min para más tarde aplicarla a nuestro conjunto de datos que utilizaremos para modelar. 
+
+```{r}
+normalize <- function(x)
+  {
+    return((x- min(x)) /(max(x)-min(x)))
+  }
+
+bank.norm <- as.data.frame(sapply(bank_2[,-33], normalize))
+bank.norm <- bank.norm %>%
+  mutate(y = bank_2$y)
+```
+
+Una vez que tenemos nuestro conjunto normalizado, vamos a separarlo en conjunto de entrenamiento y conjunto de validación con un ratio de 70:30. 
+
+```{r}
+set.seed(284)
+split <- sample.split(bank.norm$y, SplitRatio = 0.7)
+bank.train <- subset(bank.norm, split == TRUE)
+bank.test <- subset(bank.norm, split == FALSE)
+table(bank.train$y)
+```
+
+Recordemos que nuestro data set está desbalanceado respecto de la variable objetivo `y`. En nuestro conjunto de entrenamiento tenemos 23,851 encuestados que no se han suscrito y solamente 3,259 que sí se han suscrito. Para resolver este problema utilizaremos una técnica de oversampling que consiste en crear observaciones artificiales de la clase minoritaria, en este caso los que se suscriben. 
+
+```{r}
+X <- bank.train[,-33]
+Y <- as.factor(bank.train$y)
+res_SMOTE <- ubSMOTE(X, Y, perc.over = 500, k = 10, perc.under = 0, verbose = TRUE)
+bank.train.2 <- rbind(bank.train,data.frame(res_SMOTE$X,y=res_SMOTE$Y))
+bank.train.2$y <- as.factor(bank.train.2$y)
+```
+
+A continuación realizaremos "tuning" para encontrar el valor óptimo del parámetro coste para el SVM con kernel lineal y empleando 10-Fold Cross Validation. Los valores del parámetro coste que pasaremos son $\{0.001,0.01,0.1, 1,5,10,100\}$.
+
+```{r, eval= FALSE}
+set.seed(284)
+svm_lineal <- tune(svm, y~.,data=bank.train.2 ,kernel ="linear", 
+              ranges =list(cost=c(0.001,0.01,0.1, 1,5,10,100)))
+saveRDS(svm_lineal, "./svm_lineal.rds")
+```
+
+La ejecución del algoritmo ha durado más de 30 horas, con lo cual es inviable ejecutarlo de nuevo tanto para pasarlo a formato html y/o pdf como para que otros lo ejecuten. La solución ha sido guardar los resultados en un archivo .rds llamado "svm_lineal.rds" y que llamaremos para trabajar con ellos.
+
+```{r}
+svm_lineal <- readRDS("svm_lineal.rds")
+summary(svm_lineal)
+```
+
+Vemos que el valor óptimo del parámetro coste es 100, con una mejor performance de 0.1796032. Vamos a realizar la matriz de confusión correspondiente.
+
+```{r}
+svm_lineal_pred <- predict(svm_lineal$best.model, bank.test)
+tab_svm_lineal <- confusionMatrix(as.factor(svm_lineal_pred), as.factor(bank.test$y), positive = "1")
+tab_svm_lineal
+tab_svm_lineal$byClass["F1"]
+```
+
+Obtenemos una accuracy del `r unname(tab_svm_lineal$overall[1])`, una sensibilidad del `r unname(tab_svm_lineal$byClass[1])` y una F-medida del `r unname(tab_svm_lineal$byClass[7])`. Veamos para SVM con kernel radiales y polinomiales.
+
+## SVM con kernel radial
+
+Para realizar el SVM con kernel radial elegimos un coste 100 y una $\gamma = 0.1$. De nuevo la ejecución del algoritmo es muy largo, con lo cual guardaremos el modelo en un archivo .rds llamado "svm_rbf.rds".
+
+```{r, eval=FALSE}
+svm_rbf <- svm(y~.,data=bank.train.2 ,kernel ="radial", cost = 100, gamma = 0.1)
+saveRDS(svm_rbf, "./svm_rbf.rds")
+```
+
+```{r}
+svm_rbf <- readRDS("svm_rbf.rds")
+svm_rbf_pred <- predict(svm_rbf, bank.test)
+tab_svm_rbf <- confusionMatrix(as.factor(svm_rbf_pred), as.factor(bank.test$y), positive = "1")
+tab_svm_rbf
+tab_svm_rbf$byClass["F1"]
+```
+
+Vemos algo diferente aquí. El accuracy ha subido hasta un valor de `r unname(tab_svm_rbf$overall[1])` pero la sensibilidad (`r unname(tab_svm_rbf$byClass[1])`) y la F-medida (`r unname(tab_svm_rbf$byClass[7])`) tienen unos valores muy bajos. Observamos que aunque el accuracy haya subido, debido a que clasifica más observaciones en la clase "0", los resultados son peores en relación con las otras medidas.
+
+## SVM con kernel polinomial
+
+```{r, eval=FALSE}
+svm_poly_1 <- svm(y~.,data=bank.train.2 ,kernel ="polynomial", cost = 100, gamma = 0.1, degree = 2)
+saveRDS(svm_poly_1, "./svm_poly_1.rds")
+```
+
+```{r}
+svm_poly_1 <- readRDS("svm_rbf.rds")
+svm_poly_pred_1 <- predict(svm_poly_1, bank.test)
+tab_svm_poly_1 <- confusionMatrix(as.factor(svm_poly_pred_1), as.factor(bank.test$y), positive = "1")
+tab_svm_poly_1
+tab_svm_poly_1$byClass["F1"]
+```
+
+```{r, eval=FALSE}
+svm_poly_2 <- svm(y~.,data=bank.train.2 ,kernel ="polynomial", cost = 100, gamma = 0.1, degree = 3)
+saveRDS(svm_poly_2, "./svm_poly_2.rds")
+```
+
+```{r}
+svm_poly_2 <- readRDS("svm_rbf.rds")
+svm_poly_pred_2 <- predict(svm_poly_2, bank.test)
+tab_svm_poly_2 <- confusionMatrix(as.factor(svm_poly_pred_2), as.factor(bank.test$y), positive = "1")
+tab_svm_poly_2
+tab_svm_poly_2$byClass["F1"]
+```
+
+Nos da exactamente el mismo resultado que el SVM con kernel radial.
+
+# Otros modelos de Machine Learning
+
+## Regresión logística
+
+Primero de todo vamos a entrenar el modelo con el conjunto de entrenamiento, realizando la regresión logística múltiple teniendo a la variable `y` como variable de respuesta y todas las otras variables como explicativas (quitaremos un grupo para cada variable dummy y será nuestro grupo de control). Utilizaremos el método de eliminación hacia atrás para encontrar el modelo más óptimo.
+
+```{r}
+reg_log <- glm(y~. -job_Services-marital_single-education_tertiary-default_yes-housing_yes-loan_yes-
+                 month_sep, data = bank.train.2, family = binomial)
+summary(reg_log)
+```
+
+La interpretación de los coeficientes, tomando `balance` como ejemplo, sería: un aumento de una unidad en la variable `balance` (una unidad más de saldo medio anual en la cuenta) hace aumentar el logaritmo de la probabilidad de suscribirse al depósito a plazo en 0.775. 
+
+Vemos que la mayoría de las variables son significativas al menos a un 5% de nivel de significación (debido a los p-valores), las únicas variables que no son significativas son: `age`, `month_dec` y `month_oct`.
+
+Ahora vamos a realizar la predicción del modelo con el conjunto de testing. La predicción es en probabilidades, consideraremos que si es mayor que 0.5 será que se suscribe y, si es menor que 0.5, es que no se sucriibe.
+
+```{r}
+reg_log_probs <- predict(reg_log, newdata = bank.test, type = "response")
+reg_log_pred <- ifelse(reg_log_probs > 0.5, 1, 0)
+tab_log <- confusionMatrix(as.factor(reg_log_pred), as.factor(bank.test$y), positive = "1")
+tab_log
+tab_log$byClass["F1"]
+```
+El accuracy que nos sale es `r unname(tab_log$overall[1])`, la sensibilidad es `r unname(tab_log$byClass[1])` y, finalmente, el valor de la F-medida es `r unname(tab_log$byClass[7])`.
+
+Vamos a eliminar las variables `age`, `month_dec` y `month_oct` del modelo de regresión logística por no ser significativas.
+
+```{r}
+reg_log_1<- glm(y~. -job_Services-marital_single-education_tertiary-default_yes-housing_yes-loan_yes-
+                  month_sep-age-month_dec-month_oct, data = bank.train.2, family = binomial)
+summary(reg_log_1)
+```
+
+Ahora todas las variabls son significativas al 5%.
+
+```{r}
+reg_log_probs_1 <- predict(reg_log_1, newdata = bank.test, type = "response")
+reg_log_pred_1 <- ifelse(reg_log_probs_1 > 0.5, 1, 0)
+tab_log_1 <- confusionMatrix(as.factor(reg_log_pred_1), as.factor(bank.test$y), positive = "1")
+tab_log_1
+tab_log_1$byClass["F1"]
+```
+
+Ahora los valores que tenemos son:
+
+* Acurracy: `r unname(tab_log_1$overall[1])`
+
+* Sensibilidad: `r unname(tab_log_1$byClass[1])`
+
+* F-medida: `r unname(tab_log_1$byClass[7])`
+
+Los resultados mejoran ligeralmente que el modelo sin quitar las variables no significativas.
+
+## KNN (K-nearest neighbors)
+
+El método de K-Nearest Neighbors es otro método de clasificación. El algoritmo reconoce patrones en los datos sin un aprendizaje específico, consiguiendo un criterio de agrupamiento de los datos a partir de un conjunto de entrenamiento. 
+
+A continuación vamos a clasificar nuestras observaciones, para más tarde construir la matriz de confusión.
+
+```{r}
+set.seed(248)
+bank_knn <- knn(train = bank.train.2[,-33], test = bank.test[,-33], cl = bank.train.2$y, k = 10)
+tab_knn <- confusionMatrix(as.factor(bank_knn), as.factor(bank.test$y), positive = "1")
+```
+
+```{r}
+tab_knn
+tab_knn$byClass["F1"]
+```
+
+Los valores que tenemos son:
+
+* Acurracy: `r unname(tab_knn$overall[1])`
+
+* Sensibilidad: `r unname(tab_knn$byClass[1])`
+
+* F-medida: `r unname(tab_knn$byClass[7])`
+
+## Decision tree
+
+Como nuestra variable dependiente es binaria, vamos a construir un árbol de clasificación en vez de un árbol de regresión. Este algoritmo, de forma general, separa los datos en grupos (las clases de la variable dependiente) utilizando la mejor variable explicativa en cada nodo. Vamos a construir el árbol de clasificación con el conjunto de entrenamiento cogiendo el parámetro de complejidad (cp) igual a 0. Luego haremos la predicción con el conjunto de test, para más adelante dibujar la matriz de confusión.
+
+```{r}
+bank_tree <- rpart(y ~., data = bank.train.2, method = "class", 
+                   control = rpart.control(cp = 0))
+tree_prediction <- predict(bank_tree, newdata = bank.test, type = "class") 
+tab_tree <- confusionMatrix(as.factor(tree_prediction), as.factor(bank.test$y), positive = "1")
+tab_tree
+tab_tree$byClass["F1"]
+```
+
+Los valores de las medidas son:
+
+* Acurracy: `r unname(tab_tree$overall[1])`
+
+* Sensibilidad: `r unname(tab_tree$byClass[1])`
+
+* F-medida: `r unname(tab_tree$byClass[7])`
+
+A continuación vamos a podar el árbol. Para ello, vamos a hacer un análisis del parámetro de complejidad. Cogeremos el valor del parámetro que minimice el error de la validación cruzada (xerror).
+
+```{r}
+printcp(bank_tree)
+```
+
+```{r}
+plotcp(bank_tree)
+min_best_cp <- bank_tree$cptable[which.min(bank_tree$cptable[,"xerror"]),"CP"]
+```
+
+Con el valor del cp óptimo, podamos el árbol y construimos la predicción junto con la matriz de confusión.
+
+```{r}
+bank_tree_fit <- prune(bank_tree, min_best_cp)
+tree_fit_prediction <- predict(bank_tree_fit, newdata = bank.test, type = "class")
+tab_fit_tree <- confusionMatrix(as.factor(tree_fit_prediction), as.factor(bank.test$y), positive = "1")
+tab_fit_tree
+tab_fit_tree$byClass["F1"]
+```
+
+Conseguimos unos resultados mejores que el árbol sin podar:
+
+* Acurracy: `r unname(tab_fit_tree$overall[1])`
+
+* Sensibilidad: `r unname(tab_fit_tree$byClass[1])`
+
+* F-medida: `r unname(tab_fit_tree$byClass[7])`
+
+## LDA (Análisis Discriminante Lineal)
+
+El análisis discriminante lineal es un método que se utiliza para encontrar una combinación lineal de cualidades que caracterizan o separan dos o más clases de objetos. Se suele utilizar este método para reducir la dimensionalidad del conjunto de datos, pero también se usa como un clasificador lineal.  
+
+Utilizamos la función `lda` para realizar el modelo, para más tarde predecir los valores con el conjunto de test y conseguir la matriz de confusión.
+
+```{r}
+bank_lda <- lda(y ~., data = bank.train.2)
+lda_pred <- predict(bank_lda, bank.test, type = "response")
+tab_lda <- confusionMatrix(as.factor(lda_pred$class), as.factor(bank.test$y), positive = "1")
+tab_lda
+tab_lda$byClass["F1"]
+```
+
+Los valores que nos salen son decentes y son:
+
+* Acurracy: `r unname(tab_lda$overall[1])`
+
+* Sensibilidad: `r unname(tab_lda$byClass[1])`
+
+* F-medida: `r unname(tab_lda$byClass[7])`
+
+## Radom Forest
+
+Un solo árbol de decisión no es suficiente, ya que sufren de problemas de sesgo y varianza en las predicciones. Para poder mejorar tanto los problemas comentados y una mejor precisión, vamos a introducir el concepto de Random Forest. Random Forest es un método tipo ensemble que está formado por un grupo de modelos predictivos (clasificatorios en nuestro caso) alcanzando una precisión y una estabilidad mejores. Los árboles sufren problemas de sesgo y varianza en las predicciones; Random Forest forma parte de los métodos de Bagging y éstos funcionan de la siguiente manera:
+
+* Crear muchos subconjuntos de datos.
+* Construir múltiples modelos.
+* Combinar los modelos construidos.
+
+Random Forest crea un grupo de modelos aparentemente débiles (múltiples árboles de decisión), para combinarlos y transformarlos en un modelo más potente. 
+
+Usamos la función `randomForest` del paquete `randomForest` asignando en 1,000 el número de árboles.
+
+```{r}
+bank_rf <- randomForest(y ~ ., data = bank.train.2, ntree = 1000)
+rf_pred <- predict(bank_rf, newdata = bank.test, type = 'class')
+tab_rf <- confusionMatrix(as.factor(rf_pred), as.factor(bank.test$y), positive = "1")
+tab_rf
+tab_rf$byClass["F1"]
+```
+
+Definitivamente estos son los mejores resultados alcanzados hasta este momento:
+
+* Acurracy: `r unname(tab_rf$overall[1])`
+
+* Sensibilidad: `r unname(tab_rf$byClass[1])`
+
+* F-medida: `r unname(tab_rf$byClass[7])`
+
+## ANN (Redes neuronales artificiales)
+
+Se han realizado pruebas con diferentes valores de los parámetros y las conclusiones más importantes son:
+
+* El algoritmo "backpropagation" no se utiliza ya que no converge.
+
+* Se ha probado con ratio de aprendizaje más pequeños, como 0.01 0 0.001, y tampoco converge.
+
+* Nos hemos visto obligado a poner un "threshold" de 1 para la convergencia del algoritmo.
+
+Por todo esto, los valores de los parámetros que son fijos son:
+
+* threshold = 1
+
+* err.fct = "sse"
+
+* linear.output = FALSE, ya que se trata de clasificación
+
+* learningrate = 0.1
+
+* act.fct = "logistic"
+
+Ejecutamos el algoritmo con una capa de 3 neuronas.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(y ~. , data = bank.train.2, 
+                 hidden = c(3),
+                 threshold = 1,
+                 err.fct="sse",
+                 linear.output=FALSE,
+                 learningrate = 0.1,
+                 act.fct = "logistic")
+
+ANN_pred <- round(compute(ANN, bank.test[, -33])$net.result)
+
+cm_2 <- confusionMatrix(as.factor(ANN_pred[,2]), as.factor(bank.test$y), positive = "1")
+cm_2
+cm_2$byClass["F1"]
+```
+
+```{r}
+plot(ANN, rep = "best")
+```
+
+Las medidas que conseguimos son:
+
+* Acurracy: `r unname(cm_2$overall["Accuracy"])`
+
+* Sensibilidad: `r unname(cm_2$byClass[1])`
+
+* F-medida: `r unname(cm_2$byClass[7])`
+
+# Conclusión
+
+Vamos a poner en una tabla los resultados de los diferentes métodos que hemos empleado. 
+
+```{r}
+resultados <- data.frame("Accuracy" = c(unname(tab_svm_lineal$overall["Accuracy"]),
+                                   unname(tab_log_1$overall["Accuracy"]), 
+                                   unname(tab_knn$overall["Accuracy"]), 
+                                   unname(tab_fit_tree$overall["Accuracy"]), 
+                                   unname(tab_lda$overall["Accuracy"]), 
+                                   unname(tab_rf$overall["Accuracy"]),
+                                   unname(cm_2$overall["Accuracy"])), 
+                    "Sensitivity" = c(unname(tab_svm_lineal$byClass[1]), 
+                                      unname(tab_log_1$byClass[1]), 
+                                      unname(tab_knn$byClass[1]), 
+                                      unname(tab_fit_tree$byClass[1]), 
+                                      unname(tab_lda$byClass[1]),
+                                      unname(tab_rf$byClass[1]),
+                                      unname(cm_2$byClass[1])), 
+                    "F-medida" = c(unname(tab_svm_lineal$byClass[7]), 
+                                   unname(tab_log_1$byClass[7]), 
+                                   unname(tab_knn$byClass[7]),
+                                   unname(tab_fit_tree$byClass[7]), 
+                                   unname(tab_lda$byClass[7]), 
+                                   unname(tab_rf$byClass[7]),
+                                   unname(cm_2$byClass[7])))
+
+rownames(resultados) <- c("SVM kernel lineal", "Regresión logística", "K-NN", "Decision tree", "LDA", "Random-Forest", "ANN")
+resultados
+```
+
+Vemos que para el accuracy el mejor modelo es Random Forest con `r unname(tab_rf$overall["Accuracy"])`, si miramos la sensibilidad el mejor modelo es ANN (Redes neuronales artificiales) con `r unname(cm_2$byClass[1])` y por último, si miramos la F-medida el mejor modelo también es Random Forest con `r unname(tab_rf$byClass[7])`. Concluimos que si hay que elegir uno de estos modelos, elegiríamos el Random Forest porque las medidas que nos han salido indican un mejor rendimiento de este modelo.

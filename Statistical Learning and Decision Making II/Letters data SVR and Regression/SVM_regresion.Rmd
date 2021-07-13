@@ -1,0 +1,908 @@
+---
+title: "SVM: Práctica de regresión"
+author: "Jun De Wu"
+date: "12/06/2021"
+output:
+  pdf_document:
+    toc: yes
+    number_sections: yes
+  html_document:
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+linkcolor: red
+header-includes: \renewcommand{\contentsname}{Contenidos}
+citecolor: purple
+toccolor: blue
+urlcolor: blue
+---
+
+```{r, warning = FALSE, message=FALSE}
+require(tidyverse)
+require(e1071)
+require(MLmetrics)
+require(caTools)
+require(ggcorrplot)
+require(FNN)
+require(rpart)
+require(rpart.plot)
+require(randomForest)
+require(neuralnet)
+```
+
+# Introducción
+
+Nuestro conjunto de datos contiene información sobre los bloques de vivienda de California en el año 1990. De media, un bloque de vivienda contenía 1425.5 personas que vivían en un espacio reducido. En total tenemos 20640 observaciones y 9 variables. 
+
+# Exploración de los datos
+
+```{r, warning=FALSE, message=FALSE}
+dataset <- read.csv("cadata2.csv", sep = ",", header = TRUE)
+dataset_1 <- dataset
+glimpse(dataset)
+```
+
+Hay nueve variables:
+
+* `median_house_value`: Precio medio de la vivienda
+
+* `median_income`: Ingreso medio de una familia
+
+* `housing_median_age`: Edad media de las viviendas
+
+* `total_rooms`: Número total de cuartos
+
+* `total_bedrooms`: Número total de habitaciones
+
+* `population`: Población del bloque
+
+* `households`: Familia que viven en el bloque
+
+* `latitude`: Latitud de la distancia entre los centroides de cada grupo de bloque
+
+* `longitude`: Longitud de la distancia entre los centroides de cada grupo de bloque
+
+```{r}
+summary(dataset)
+anyNA(dataset)
+```
+
+Afortunadamente no hay valores NA en nuestro conjunto de datos.
+
+```{r}
+correlacion <- cor(dataset, 
+                   method = "spearman")
+
+ggcorrplot(correlacion, lab = TRUE, lab_size = 1.7, legend.title = "Correlación", 
+           lab_col = "blue4", colors = c("yellow4", "white", "green4")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(x = "", y = "", title = "Matriz de correlación")
+```
+
+Hay muchas variables correlacionadas entre ellas pero no podemos eliminar ninguna ya que en los modelos de regresión vamos a utilizarlas todas (menos `latitude` y `longitude`).
+
+Analizaremos los outliers presentes en cada variable para ver si los dejamos o los eliminamos.
+
+## Variable `median_house_value`
+
+```{r, message=FALSE, warning=FALSE}
+dataset %>%
+  ggplot(aes(x = 0, y = median_house_value)) + 
+  geom_boxplot(width = 0.7, outlier.colour = "blue4", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  theme_linedraw() +
+  labs(x = "x", y = "median_house_value") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+```{r}
+table(dataset$median_house_value > 400000)
+```
+
+Vemos que los puntos outliers los tenemos por encima de 400000$ y hay 1744 observaciones. No los quitaremos ya que hay muchas y se trata de la variable objetivo.
+
+Hay 1744 outliers en esta variable.
+
+## Variable `median_income`
+
+```{r, message=FALSE, warning=FALSE}
+dataset %>%
+  ggplot(aes(x = 0, y = median_income)) + 
+  geom_boxplot(width = 0.7, outlier.colour = "blue4", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  theme_linedraw() +
+  labs(x = "x", y = "median_income") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+```{r}
+table(dataset$median_income > 12.5)
+```
+
+En este caso, vemos que los outliers son los bloques que tienen como ingreso medio por familia por encima de 7.5. Sin embargo quitaremos los que estén por encima de 12.5 ya que si no quitaríamos muchas observaciones.
+
+```{r}
+dataset_1 <- dataset_1 %>%
+  filter(dataset_1$median_income <= 12.5)
+```
+
+## Variable `housing_median_age`
+
+```{r, message=FALSE, warning=FALSE}
+dataset %>%
+  ggplot(aes(x = 0, y = housing_median_age)) + 
+  geom_boxplot(width = 0.7, outlier.colour = "blue4", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  theme_linedraw() +
+  labs(x = "x", y = "housing_median_age") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+No hay ningún outlier para esta variable, entonces no quitaremos ningún dato.
+
+## Variable `total_rooms`
+
+```{r, message=FALSE, warning=FALSE}
+dataset %>%
+  ggplot(aes(x = 0, y = total_rooms)) + 
+  geom_boxplot(width = 0.7, outlier.colour = "blue4", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  theme_linedraw() +
+  labs(x = "x", y = "total_rooms") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+```{r}
+table(dataset$total_rooms > 30000)
+```
+
+El número total de cuartos varía mucho dependiendo de la ubicación y el tipo de cada bloque, con lo cual hay una gran cantidad de outliers. Consideraremos los bloques que tienen más de 30000 cuartos como outliers y los eliminaremos.
+
+```{r}
+dataset_1 <- dataset_1 %>%
+  filter(dataset_1$total_rooms <= 30000)
+```
+
+## Variable `total_bedrooms`
+
+```{r, message=FALSE, warning=FALSE}
+dataset %>%
+  ggplot(aes(x = 0, y = total_bedrooms)) + 
+  geom_boxplot(width = 0.7, outlier.colour = "blue4", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  theme_linedraw() +
+  labs(x = "x", y = "total_bedrooms") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+```{r}
+table(dataset$total_bedrooms > 4000)
+```
+
+Igual que el caso anterior, quitaremos las 26 observaciones que tienen más de 4000 habitaciones ya que sería observaciones muy atípicas.
+
+```{r}
+dataset_1 <- dataset_1 %>%
+  filter(dataset_1$total_bedrooms <= 4000)
+```
+
+## Variable `population`
+
+```{r, message=FALSE, warning=FALSE}
+dataset %>%
+  ggplot(aes(x = 0, y = population)) + 
+  geom_boxplot(width = 0.7, outlier.colour = "blue4", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  theme_linedraw() +
+  labs(x = "x", y = "population") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+```{r}
+table(dataset$population > 20000)
+```
+
+La población es importante. Consideraremos los bloques que tienen más de 20000 habitantes como outliers y los eliminaremos.
+
+```{r}
+dataset_1 <- dataset_1 %>%
+  filter(dataset_1$population <= 20000)
+```
+
+## Variable `households`
+
+```{r, message=FALSE, warning=FALSE}
+dataset %>%
+  ggplot(aes(x = 0, y = households)) + 
+  geom_boxplot(width = 0.7, outlier.colour = "blue4", 
+               outlier.size = 2, outlier.shape = 18) +
+  stat_summary(fun.y = mean, geom = "point", shape = 8, size = 1.5, color ="red4") +
+  theme_linedraw() +
+  labs(x = "x", y = "households") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+```
+
+```{r}
+table(dataset$households > 4000)
+```
+
+El número de familia que viven en un bloque que son considerados outliers es por encima 1000. Pero consideraremos eliminar los bloques que tienen más de 4000 familias viviendo en ese bloque.
+
+```{r}
+dataset_1 <- dataset_1 %>%
+  filter(dataset_1$households <= 4000)
+```
+
+
+# SVR 
+
+El modelo que vamos a construir es el siguiente:
+
+$$\begin{equation*}
+        \begin{split}
+            \mbox{ln(median house value)} &= a_1 + a_2\mbox{median income} + a_3\mbox{median income}^2 + a_4\mbox{median income}^3 + a_5\mbox{ln(housing median_age)} \\
+            & + a_6ln(\frac{\mbox{total rooms}}{population}) + a_7ln(\frac{\mbox{total bedrooms}}{population}) a_8ln(\frac{population}{households}) + a_9ln(households)\\
+        \end{split}
+\end{equation*}$$
+
+Entonces vamos a construir un data frame que contenga estas variables y eliminamos las originales. 
+
+```{r}
+dataset_1 <- dataset_1 %>%
+  mutate(ln_median_house_value = log(median_house_value), median_income_2 = median_income^2, 
+         median_income_3 = median_income^3, 
+         ln_housing_median_age = log(housing_median_age), ln_total_rooms_population =
+           log(total_rooms/population), ln_total_bedrooms_population =
+           log(total_bedrooms/population), ln_population_households =
+           log(population/households), ln_households = log(households))
+
+dataset_1 <- dataset_1 %>%
+  dplyr::select(c("median_income", "ln_median_house_value", "median_income_2", "median_income_3",
+           "ln_housing_median_age", "ln_total_rooms_population", "ln_total_bedrooms_population",
+           "ln_population_households", "ln_households"))
+```
+
+Una vez que tenemos nuestro data set con las variables involucradas en la creación de los modelos que haremos, vamos a normalizar los datos menos la variable objetivo.
+
+```{r}
+normalize <- function(x)
+  {
+    return((x- min(x)) /(max(x)-min(x)))
+  }
+
+dataset_norm <- as.data.frame(lapply(dataset_1[,-2], normalize))
+dataset_norm <- dataset_norm %>%
+  mutate(ln_median_house_value = dataset_1$ln_median_house_value)
+```
+
+Separamos nuestro conjunto de datos en dos: conjunto de entrenamiento y conjunto de validación con un ratio de 70:30. 
+
+```{r}
+set.seed(284)
+split <- sample.split(dataset_norm$ln_median_house_value, SplitRatio = 0.7)
+dt.train <- subset(dataset_norm, split == TRUE)
+dt.test <- subset(dataset_norm, split == FALSE)
+```
+
+Los errores que conseguimos en cada modelo los guardamos en estos dos vectores, dependiendo de si se trata de Epsilon-SVR o Nu-SVR.
+
+```{r}
+eps_reg <- vector()
+nu_reg <- vector()
+```
+
+Vamos a realizar un total de 32 modelos de SVR. Para cada tipo de SVR (Epsilon-SVR y Nu-SVR) realizaremos modelos para los tres tipos de kernel: lineal, radial y polinomial (grado 2 y 3); y para cada uno de estos tipos de kernel haremos 4 modelos con estos valores del parámetro coste: $\{0.001,0.01,0.1,1\}$. Utilzaremos la raíz del error cuadrático medio como la medida para valorar los modelos.
+
+## Epsilon-SVR
+
+### Kernel lineal
+
+```{r}
+svr_1 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "linear", cost = 0.001)
+svr_pred_1 <- predict(svr_1, newdata = dt.test)
+rmse_svr_1 <- sqrt(MSE(y_pred = svr_pred_1, y_true = dt.test$ln_median_house_value))
+eps_reg[1] <- rmse_svr_1
+rmse_svr_1
+```
+
+```{r}
+svr_2 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "linear", cost = 0.01)
+svr_pred_2 <- predict(svr_2, newdata = dt.test)
+rmse_svr_2 <- sqrt(MSE(y_pred = svr_pred_2, y_true = dt.test$ln_median_house_value))
+eps_reg[2] <- rmse_svr_2
+rmse_svr_2
+```
+
+```{r}
+svr_3 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "linear", cost = 0.1)
+svr_pred_3 <- predict(svr_3, newdata = dt.test)
+rmse_svr_3 <- sqrt(MSE(y_pred = svr_pred_3, y_true = dt.test$ln_median_house_value))
+eps_reg[3] <- rmse_svr_3
+rmse_svr_3
+```
+
+```{r}
+svr_4 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "linear", cost = 1)
+svr_pred_4 <- predict(svr_4, newdata = dt.test)
+rmse_svr_4 <- sqrt(MSE(y_pred = svr_pred_4, y_true = dt.test$ln_median_house_value))
+eps_reg[4] <- rmse_svr_4
+rmse_svr_4
+```
+
+### Kernel radial
+
+```{r}
+svr_5 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "radial", cost = 0.001, gamma = 0.1)
+svr_pred_5 <- predict(svr_5, newdata = dt.test)
+rmse_svr_5 <- sqrt(MSE(y_pred = svr_pred_5, y_true = dt.test$ln_median_house_value))
+eps_reg[5] <- rmse_svr_5
+rmse_svr_5
+```
+
+```{r}
+svr_6 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "radial", cost = 0.01, gamma = 0.1)
+svr_pred_6 <- predict(svr_5, newdata = dt.test)
+rmse_svr_6 <- sqrt(MSE(y_pred = svr_pred_6, y_true = dt.test$ln_median_house_value))
+eps_reg[6] <- rmse_svr_6
+rmse_svr_6
+```
+
+```{r}
+svr_7 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "radial", cost = 0.1, gamma = 0.1)
+svr_pred_7 <- predict(svr_5, newdata = dt.test)
+rmse_svr_7 <- sqrt(MSE(y_pred = svr_pred_7, y_true = dt.test$ln_median_house_value))
+eps_reg[7] <- rmse_svr_7
+rmse_svr_7
+```
+
+```{r}
+svr_8 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "radial", cost = 1, gamma = 0.1)
+svr_pred_8 <- predict(svr_5, newdata = dt.test)
+rmse_svr_8 <- sqrt(MSE(y_pred = svr_pred_8, y_true = dt.test$ln_median_house_value))
+eps_reg[8] <- rmse_svr_8
+rmse_svr_8
+```
+
+### Kernel polinomial de grado 2
+
+```{r}
+svr_9 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 0.001, gamma = 0.1, degree = 2)
+svr_pred_9 <- predict(svr_5, newdata = dt.test)
+rmse_svr_9 <- sqrt(MSE(y_pred = svr_pred_9, y_true = dt.test$ln_median_house_value))
+eps_reg[9] <- rmse_svr_9
+rmse_svr_9
+```
+
+```{r}
+svr_10 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 0.01, gamma = 0.1, degree = 2)
+svr_pred_10 <- predict(svr_5, newdata = dt.test)
+rmse_svr_10 <- sqrt(MSE(y_pred = svr_pred_10, y_true = dt.test$ln_median_house_value))
+eps_reg[10] <- rmse_svr_10
+rmse_svr_10
+```
+
+
+```{r}
+svr_11 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 0.1, gamma = 0.1, degree = 2)
+svr_pred_11 <- predict(svr_5, newdata = dt.test)
+rmse_svr_11 <- sqrt(MSE(y_pred = svr_pred_11, y_true = dt.test$ln_median_house_value))
+eps_reg[11] <- rmse_svr_11
+rmse_svr_11
+```
+
+```{r}
+svr_12 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 1, gamma = 0.1, degree = 2)
+svr_pred_12 <- predict(svr_5, newdata = dt.test)
+rmse_svr_12 <- sqrt(MSE(y_pred = svr_pred_12, y_true = dt.test$ln_median_house_value))
+eps_reg[12] <- rmse_svr_12
+rmse_svr_12
+```
+
+### Kernel polinomial de grado 3
+
+```{r}
+svr_13 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 0.001, gamma = 0.1, degree = 3)
+svr_pred_13 <- predict(svr_5, newdata = dt.test)
+rmse_svr_13 <- sqrt(MSE(y_pred = svr_pred_13, y_true = dt.test$ln_median_house_value))
+eps_reg[13] <- rmse_svr_13
+rmse_svr_13
+```
+
+```{r}
+svr_14 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 0.01, gamma = 0.1, degree = 3)
+svr_pred_14 <- predict(svr_5, newdata = dt.test)
+rmse_svr_14 <- sqrt(MSE(y_pred = svr_pred_14, y_true = dt.test$ln_median_house_value))
+eps_reg[14] <- rmse_svr_14
+rmse_svr_14
+```
+
+
+```{r}
+svr_15 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 0.1, gamma = 0.1, degree = 3)
+svr_pred_15 <- predict(svr_5, newdata = dt.test)
+rmse_svr_15 <- sqrt(MSE(y_pred = svr_pred_15, y_true = dt.test$ln_median_house_value))
+eps_reg[15] <- rmse_svr_15
+rmse_svr_15
+```
+
+```{r}
+svr_16 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "eps-regression", 
+                 kernel = "polynomial", cost = 1, gamma = 0.1, degree = 3)
+svr_pred_16 <- predict(svr_5, newdata = dt.test)
+rmse_svr_16 <- sqrt(MSE(y_pred = svr_pred_13, y_true = dt.test$ln_median_house_value))
+eps_reg[16] <- rmse_svr_16
+rmse_svr_16
+```
+
+Visualizamos los errores que hemos obtenido con las Epsilon-SVR. Recordemos que hay cuatro modelos con costes diferentes para cada tipo de kernel.
+
+```{r}
+eps_reg
+```
+
+Vemos que los únicos modelos que varían los errores son los SVR con kernel lineal, el resto tienen el mismo error. Vamos a coger el modelo con kernel lineal que tiene el error mínimo y mostrar los coeficientes obtenidos. Para el resto de modelos, como tienen el mismo error cogeremos uno de cada tipo y mostramos los coeficientes. Se muestra primero los coeficientes y el modelo nos proporciona el intercepto en los modelos que no tienen kernel lineal, para los modelos con kernel lineal utilizamos la función `coef`.
+
+```{r}
+coef(svr_2)
+```
+
+Las características que influyen de forma positiva en el precio medio de la vivienda son las que tienen coeficiente positivo y viceversa. Vemos que este modelo nos refleja características que influyen en la subida del precio medio de la vivienda como el ingreso medio, la edad media de las viviendas, etc.
+
+```{r}
+t(svr_5$coefs) %*% svr_5$SV
+svr_5$rho
+```
+
+En este modelo la única variable que influye de manera negativa en el precio medio de las viviendas es `ln_population_households`.
+
+```{r}
+t(svr_9$coefs) %*% svr_9$SV
+svr_9$rho
+```
+
+```{r}
+t(svr_13$coefs) %*% svr_13$SV
+svr_13$rho
+```
+
+Los dos últimos modelos son iguales que el segundo: la única variable que tiene coeficiente negativo es `ln_population_households`.
+
+## Nu-SVR
+
+### Kernel lineal
+
+```{r}
+svr_1 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "linear", cost = 0.001)
+svr_pred_1 <- predict(svr_1, newdata = dt.test)
+rmse_svr_1 <- sqrt(MSE(y_pred = svr_pred_1, y_true = dt.test$ln_median_house_value))
+nu_reg[1] <- rmse_svr_1
+rmse_svr_1
+```
+
+```{r}
+svr_2 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "linear", cost = 0.01)
+svr_pred_2 <- predict(svr_2, newdata = dt.test)
+rmse_svr_2 <- sqrt(MSE(y_pred = svr_pred_2, y_true = dt.test$ln_median_house_value))
+nu_reg[2] <- rmse_svr_2
+rmse_svr_2
+```
+
+```{r}
+svr_3 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "linear", cost = 0.1)
+svr_pred_3 <- predict(svr_3, newdata = dt.test)
+rmse_svr_3 <- sqrt(MSE(y_pred = svr_pred_3, y_true = dt.test$ln_median_house_value))
+nu_reg[3] <- rmse_svr_3
+rmse_svr_3
+```
+
+```{r}
+svr_4 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "linear", cost = 1)
+svr_pred_4 <- predict(svr_4, newdata = dt.test)
+rmse_svr_4 <- sqrt(MSE(y_pred = svr_pred_4, y_true = dt.test$ln_median_house_value))
+nu_reg[4] <- rmse_svr_4
+rmse_svr_4
+```
+
+### Kernel radial
+
+```{r}
+svr_5 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "radial", cost = 0.001, gamma = 0.1)
+svr_pred_5 <- predict(svr_5, newdata = dt.test)
+rmse_svr_5 <- sqrt(MSE(y_pred = svr_pred_5, y_true = dt.test$ln_median_house_value))
+nu_reg[5] <- rmse_svr_5
+rmse_svr_5
+```
+
+```{r}
+svr_6 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "radial", cost = 0.01, gamma = 0.1)
+svr_pred_6 <- predict(svr_5, newdata = dt.test)
+rmse_svr_6 <- sqrt(MSE(y_pred = svr_pred_6, y_true = dt.test$ln_median_house_value))
+nu_reg[6] <- rmse_svr_6
+rmse_svr_6
+```
+
+```{r}
+svr_7 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "radial", cost = 0.1, gamma = 0.1)
+svr_pred_7 <- predict(svr_5, newdata = dt.test)
+rmse_svr_7 <- sqrt(MSE(y_pred = svr_pred_7, y_true = dt.test$ln_median_house_value))
+nu_reg[7] <- rmse_svr_7
+rmse_svr_7
+```
+
+```{r}
+svr_8 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "radial", cost = 1, gamma = 0.1)
+svr_pred_8 <- predict(svr_5, newdata = dt.test)
+rmse_svr_8 <- sqrt(MSE(y_pred = svr_pred_8, y_true = dt.test$ln_median_house_value))
+nu_reg[8] <- rmse_svr_8
+rmse_svr_8
+```
+
+### Kernel polinomial de grado 2
+
+```{r}
+svr_9 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 0.001, gamma = 0.1, degree = 2)
+svr_pred_9 <- predict(svr_5, newdata = dt.test)
+rmse_svr_9 <- sqrt(MSE(y_pred = svr_pred_9, y_true = dt.test$ln_median_house_value))
+nu_reg[9] <- rmse_svr_9
+rmse_svr_9
+```
+
+```{r}
+svr_10 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 0.01, gamma = 0.1, degree = 2)
+svr_pred_10 <- predict(svr_5, newdata = dt.test)
+rmse_svr_10 <- sqrt(MSE(y_pred = svr_pred_10, y_true = dt.test$ln_median_house_value))
+nu_reg[10] <- rmse_svr_10
+rmse_svr_10
+```
+
+
+```{r}
+svr_11 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 0.1, gamma = 0.1, degree = 2)
+svr_pred_11 <- predict(svr_5, newdata = dt.test)
+rmse_svr_11 <- sqrt(MSE(y_pred = svr_pred_11, y_true = dt.test$ln_median_house_value))
+nu_reg[11] <- rmse_svr_11
+rmse_svr_11
+```
+
+```{r}
+svr_12 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 1, gamma = 0.1, degree = 2)
+svr_pred_12 <- predict(svr_5, newdata = dt.test)
+rmse_svr_12 <- sqrt(MSE(y_pred = svr_pred_12, y_true = dt.test$ln_median_house_value))
+nu_reg[12] <- rmse_svr_12
+rmse_svr_12
+```
+
+### Kernel polinomial de grado 3
+
+```{r}
+svr_13 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 0.001, gamma = 0.1, degree = 3)
+svr_pred_13 <- predict(svr_5, newdata = dt.test)
+rmse_svr_13 <- sqrt(MSE(y_pred = svr_pred_13, y_true = dt.test$ln_median_house_value))
+nu_reg[13] <- rmse_svr_13
+rmse_svr_13
+```
+
+```{r}
+svr_14 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 0.01, gamma = 0.1, degree = 3)
+svr_pred_14 <- predict(svr_5, newdata = dt.test)
+rmse_svr_14 <- sqrt(MSE(y_pred = svr_pred_14, y_true = dt.test$ln_median_house_value))
+nu_reg[14] <- rmse_svr_14
+rmse_svr_14
+```
+
+
+```{r}
+svr_15 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 0.1, gamma = 0.1, degree = 3)
+svr_pred_15 <- predict(svr_5, newdata = dt.test)
+rmse_svr_15 <- sqrt(MSE(y_pred = svr_pred_15, y_true = dt.test$ln_median_house_value))
+nu_reg[15] <- rmse_svr_15
+rmse_svr_15
+```
+
+```{r}
+svr_16 <- svm(ln_median_house_value ~. , 
+                 data = dt.train, 
+                 type = "nu-regression", 
+                 kernel = "polynomial", cost = 1, gamma = 0.1, degree = 3)
+svr_pred_16 <- predict(svr_5, newdata = dt.test)
+rmse_svr_16 <- sqrt(MSE(y_pred = svr_pred_13, y_true = dt.test$ln_median_house_value))
+nu_reg[16] <- rmse_svr_16
+rmse_svr_16
+```
+
+Vemos el vector que contiene los errores de cada modelo de las Nu-SVRs.
+
+```{r}
+nu_reg
+```
+
+De igual forma que en el apartado anterior con los Epsilon-SVR, vamos a visualizar los coeficientes de solamente cuatro modelos.
+
+```{r}
+coef(svr_2)
+```
+
+```{r}
+t(svr_5$coefs) %*% svr_5$SV
+svr_5$rho
+```
+
+```{r}
+t(svr_9$coefs) %*% svr_9$SV
+svr_9$rho
+```
+
+```{r}
+t(svr_13$coefs) %*% svr_13$SV
+svr_13$rho
+```
+
+La influencia de las variables en cada modelo es exactamente igual que el caso de los modelos de las Epsilon-SVRs.
+
+# Otros modelos de Regresión
+
+Aplicaremos otros algoritmos de regresión a nuestro conjunto de datos para comparar los resultados con los modelos de SVR.
+
+## Regresión lineal múltiple
+
+Recordamos que la regresión lineal múltiple es un método en el cual predecimos una variable dependiente o respuesta a partir de una combinación lineal de las variables independientes o explicativas.
+
+Entrenamos el modelo de regresión lineal múltiple con nuestro conjunto de entrenamiento.
+
+```{r}
+reg_lineal <- lm(ln_median_house_value ~.,
+               data = dt.train)
+summary(reg_lineal)
+```
+
+Vemos que las variables que influyen de forma positiva sobre el precio medio de las viviendas son: `median_income`, `ln_housing_median_age`, `ln_total_bedrooms_population` y `ln_households`; las otras variables influyen de forma negativa.
+
+A modo de ejemplo comentamos qué significa el coeficiente de la variable `median_income`. El valor del coeficiente que nos da el modelo es 5.29216 y lo interpretamos como: un aumento de una unidad en `median_income` hace que la variable `ln_median_house_value` suba 5.29216 unidades. Vemos que la variable `median_income_2` es la única que no es significativa a un nivel de significación del 5%.
+
+Con el conjunto de validación crearemos las predicciones con el modelo creado anteriormente y después calcularemos la raíz del error cuadrático medio (RMSE) y la utilizaremos como medida de precisión de nuestro modelo.
+
+```{r}
+reg_lineal_pred <- predict(reg_lineal, newdata = dt.test)
+rmse_reg_lin <- sqrt(MSE(y_pred = reg_lineal_pred, y_true = dt.test$ln_median_house_value))
+rmse_reg_lin
+```
+
+Nos sale un error muy parecido al mínimo error que tenemos de los modelos SVR. 
+
+## KNN (K-nearest Neighbors)
+
+El método de K-Nearest Neighbors es otro método de regresión. El algoritmo reconoce patrones en los datos sin un aprendizaje específico, consiguiendo un criterio de agrupamiento de los datos a partir de un conjunto de entrenamiento.
+
+A continuación vamos a predecir nuestras observaciones, para más tarde calcular la raíz del error cuadrático medio.
+
+```{r}
+set.seed(248)
+dt_knn <- FNN::knn.reg(train = dt.train[,-9], test = dt.test[,-9], y = dt.train$ln_median_house_value, k = 10)
+rmse_knn <- sqrt(MSE(y_pred = dt_knn$pred, y_true = dt.test$ln_median_house_value))
+rmse_knn
+```
+
+El error que conseguimos es `r rmse_knn`, muy parecido a los otros que hemos conseguido.
+
+## Regression Tree
+
+Vamos a realizar un modelo basado en un árbol de regresión. Utilizaremos nuestro conjunto de entrenamiento para entrenar los datos, para más tarde predecir y calcular la raíz del error cuadrático medio.
+
+```{r}
+reg_tree <- rpart(ln_median_house_value ~., data = dt.train, method  = "anova")
+tree_prediction <- predict(reg_tree, newdata = dt.test) 
+rmse_tree <- sqrt(MSE(y_pred = tree_prediction, y_true = dt.test$ln_median_house_value))
+rmse_tree
+```
+
+El error es bastante más grande que el resto, probablemente debido a que es un modelo muy simple.
+
+```{r}
+rpart.plot(reg_tree)
+```
+
+Con este plot vemos cómo nos ha quedado el árbol de regresión.
+
+## Random Forest
+
+Un solo árbol de regresión no es suficiente, ya que sufren de problemas de sesgo y varianza en las predicciones. Para poder mejorar tanto los problemas comentados y una mejor precisión, vamos a introducir el concepto de Random Forest. Random Forest es un método tipo ensemble que está formado por un grupo de modelos predictivos alcanzando una precisión y una estabilidad mejores. Los árboles sufren problemas de sesgo y varianza en las predicciones; Random Forest forma parte de los métodos de Bagging y éstos funcionan de la siguiente manera:
+
+* Crear muchos subconjuntos de datos.
+* Construir múltiples modelos.
+* Combinar los modelos construidos.
+
+Random Forest crea un grupo de modelos aparentemente débiles (múltiples árboles de decisión), para combinarlos y transformarlos en un modelo más potente.
+
+```{r}
+rf <- randomForest(ln_median_house_value~. , data = dt.train, ntree = 1000)
+rf_pred <- predict(rf, newdata = dt.test)
+rmse_rf <- sqrt(MSE(y_pred = rf_pred, y_true = dt.test$ln_median_house_value))
+rmse_rf
+```
+
+Con este algoritmo más sofisticado conseguimos el mejor error obtenido hasta el momento: `r rmse_rf`.
+
+## ANN 
+
+Para construir nuestras redes neuronales artificiales, hemos considerado los siguientes valores de los parámetros:
+
+* threshold = 1
+
+* err.fct = "sse"
+
+* linear.output = TRUE, ya que se trata de regresión
+
+* learningrate = 0.1
+
+* act.fct = "logistic"
+
+El primero de los dos modelos que ejecutamos es con una capa de 3 neuronas.
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(ln_median_house_value~. , data = dt.train, 
+                 hidden = c(3),
+                 threshold = 1,
+                 err.fct="sse",
+                 linear.output=TRUE,
+                 learningrate = 0.1,
+                 act.fct = "logistic")
+
+ANN_pred <- compute(ANN, dt.test[, -9])$net.result
+rmse_ann_1 <- sqrt(MSE(y_pred = ANN_pred, y_true = dt.test$ln_median_house_value))
+rmse_ann_1
+```
+
+```{r}
+plot(ANN)
+```
+
+El segundo es con 3 capas de 5, 2 y 2 neurones respectivamente. 
+
+```{r}
+set.seed(284)
+ANN <- neuralnet(ln_median_house_value~. , data = dt.train, 
+                 hidden = c(5,2,2),
+                 threshold = 1,
+                 err.fct="sse",
+                 linear.output=TRUE,
+                 learningrate = 0.1,
+                 act.fct = "logistic")
+
+ANN_pred <- compute(ANN, dt.test[, -9])$net.result
+rmse_ann_2 <- sqrt(MSE(y_pred = ANN_pred, y_true = dt.test$ln_median_house_value))
+rmse_ann_2
+```
+
+```{r}
+plot(ANN)
+```
+
+De los dos modelos, el que tiene menor error es el segundo con 3 capas de 5, 2 y 2 neuronas respectivamente.
+
+# Conclusión 
+
+Reunimos todos los errores que obtenemos en cada uno de los algoritmos de regresión. En el caso de los SVR, cogemos el mejor de los modelos de Epsilon-SVR y, por el otro lado, el mejor de los de Nu-SVR. Los visualizamos en un tabla:
+
+```{r}
+resultados <- data.frame("RMSE" = c(eps_reg[2], nu_reg[2], rmse_reg_lin, rmse_knn, rmse_tree, rmse_rf,
+                                    rmse_ann_2))
+
+rownames(resultados) <- c("Epsilon-SVR", "Nu-SVR", "Regresión lineal múltiple", "K-NN", "Regression tree",
+                           "Random-Forest", "ANN")
+resultados
+```
+
+Los dos mejores algoritmos que han cosechado un menor error en la predicción son Random-Forest (probablemente por ser un algoritmo mucho más sofisticado) y ANN. Realmente los modelos de SVR solamente han variado en el caso de kernel lineal, en los otros tipos de kernel el resultado se mantenía constante, cosa que nos hace sospechar de que esos modelos no están trabajando de la forma óptima que deberían. Recalcamos que tanto K-NN como la regresión lineal múltiple son métodos simples que han alcanzado un error similar que los modelos de SVR, siendo estos últimos unos algoritmos muchos más pesados y potentes. 
+
+En definitiva, si nos ceñimos por el error de predicción los modelos que seleccionamos son el Random-Forest y el ANN con 3 capas de 5, 2 y 2 neuronas respectivamente.
+
+
+
+
+
+
+
+
+
+
