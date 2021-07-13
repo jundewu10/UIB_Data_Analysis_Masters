@@ -1,0 +1,417 @@
+---
+title: "Análisis de chiste"
+author: "Jun De Wu"
+date: "09/05/2021"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  pdf_document:
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+linkcolor: red
+header-includes: \renewcommand{\contentsname}{Contenidos}
+citecolor: purple
+toccolor: blue
+urlcolor: blue
+---
+
+# Lectura de los datos
+
+Empezamos por cargar los paquetes que utilizaremos durante todo el documento.
+
+```{r, warning=FALSE, message=FALSE}
+require(tidyverse)
+require(tidytext)
+require(tm)
+require(splitstackshape)
+require(forcats)
+require(topicmodels)
+```
+
+El archivo `csv` que contiene los datos de los chistes es `chistes.csv` y los guardaremos en la variable `chistes_raw`. 
+
+```{r, warning=FALSE, message=FALSE}
+chistes_raw <- read_csv("chistes.csv", col_names = TRUE)
+anyNA(chistes_raw)
+```
+
+Veamos qué columnas contienen NA's.
+
+```{r}
+which(is.na(chistes_raw$origin))
+which(is.na(chistes_raw$title))
+which(is.na(chistes_raw$categories))
+which(is.na(chistes_raw$text))
+```
+
+Eliminamos las filas 414, 459, 875, 2631, 2740, 3329, 3449, 5135, 5844, 6560 y 6887 que tienen NA's que afectan a nuestro conjunto de datos.
+
+```{r}
+chistes_raw <- chistes_raw[-c(414, 459, 875, 2631, 2740, 3329, 3449, 5135, 5844, 6560, 6887),]
+```
+
+A continuación declararemos dos nuevas variables que contendrán los chistes de Pintamania y 1000 chistes por separado después de haber limpiado un poco los datos.
+
+```{r}
+pintamania <- chistes_raw %>%
+  filter(origin == "Pintamania")
+
+mil_chistes <- chistes_raw %>%
+  filter(origin == "1000 chistes")
+```
+
+Estos dos conjuntos de datos son los que nosotros utilizaremos para el desarrollo del proyecto.
+
+# Generación del corpus y limpieza de los datos
+
+Para poder generar el corpus primero tenemos que pasar los data sets de tal forma que tengan como argumentos `doc_id` y `text`. Juntaremos los textos de las columnas `title`, `origin`, `categories` y `tags` dentro de la nueva columna `doc_id` separándolos por "####" para poder guardar la información de los conjuntos originales.
+
+```{r}
+pintamania_1 <- pintamania %>%
+  mutate(doc_id = paste(title, origin, categories, tags, sep = "####")) %>%
+  select(doc_id, text)
+
+mil_chistes_1 <- mil_chistes %>%
+  mutate(doc_id = paste(title, origin, categories, tags, sep = "####")) %>%
+  select(doc_id, text)
+```
+
+Una vez que tenemos los conjuntos `pintamania_1` y `mil_chistes_1` ya podemos generar el corpus de cada caso.
+
+```{r}
+corpus_pint <- VCorpus(DataframeSource(pintamania_1), readerControl = list(language = "es"))
+corpus_mil <- VCorpus(DataframeSource(mil_chistes_1), readerControl = list(language = "es"))
+```
+
+Una vez generados los corpus realizamos la limpieza para ambos casos. En los dos casos quitaremos los stopwords, los puntos y comas, los números, los espacios en blanco extras, pasaremos las letras mayúsculas a minúsculas y quitaremos los símbolos "-, /, ?, ¿, ¡, !".
+
+```{r}
+toSpace = function(rx) tm::content_transformer(function(s) gsub(rx, ' ', s))
+```
+
+```{r}
+corpus_pint <- tm_map(corpus_pint, removePunctuation)
+corpus_pint <- tm_map(corpus_pint, removeWords, stopwords("spanish"))
+corpus_pint <- tm_map(corpus_pint, removeNumbers)
+corpus_pint <- tm_map(corpus_pint, stripWhitespace)
+corpus_pint <- tm_map(corpus_pint, content_transformer(tolower))
+corpus_pint <- tm_map(corpus_pint, toSpace('[-/?¿¡!-_–].'))
+
+corpus_pint
+```
+
+```{r}
+corpus_mil <- tm_map(corpus_mil, removePunctuation)
+corpus_mil <- tm_map(corpus_mil, removeWords, stopwords("spanish"))
+corpus_mil <- tm_map(corpus_mil, removeNumbers)
+corpus_mil <- tm_map(corpus_mil, stripWhitespace)
+corpus_mil <- tm_map(corpus_mil, content_transformer(tolower))
+corpus_mil <- tm_map(corpus_mil, toSpace('[-/?¿¡!-_–]'))
+
+corpus_mil
+```
+
+# TF-IDF por chiste
+
+El tf-idf (Term frequency times Inverse document frequency) es una cantidad usada para identificar terminos que son especialmente importantes para un documento en particular. Tenemos que generar para cada corpus su Document Term Matrix, para más adelante pasarlo a formato tidy. Con este tidy usaremos la función `bind_tf_idf` que nos dará la matriz con los tf-idf de cada palabra.
+
+```{r}
+dt_pint <- DocumentTermMatrix(corpus_pint)
+pint_tidy <- tidy(dt_pint)
+
+pint_tf_idf <- pint_tidy %>%
+  bind_tf_idf(document, term, count)
+
+dt_mil <- DocumentTermMatrix(corpus_mil)
+mil_tidy <- tidy(dt_mil)
+
+mil_tf_idf <- mil_tidy %>%
+  bind_tf_idf(document, term, count)
+```
+
+Recordamos que en la identificación de cada chiste hemos puesto el origen, el título, las categorías y los tags, separados por "####". Es hora poner cada característica como una columna y eso lo haremos con la función `cSplit` del paquete `splitstackshape`. 
+
+```{r}
+pint_tf_idf <- pint_tf_idf %>%
+  cSplit("document", "####") %>%
+  rename(title = document_1, origin = document_2, 
+         categories = document_3, tags = document_4) %>%
+  select(title, origin, term, tf_idf, categories, tags)
+
+mil_tf_idf <- mil_tf_idf %>%
+  cSplit("document", "####") %>%
+  rename(title = document_1, origin = document_2, 
+         categories = document_3, tags = document_4) %>%
+  select(title, origin, term, tf_idf, categories, tags)
+```
+
+Vamos a visualizar las palabras con alto índice de tf-idf de cada conjunto. Hay muchísimos chistes, por lo tanto lo haremos con los 4 primeros chistes de cada caso. En el data frame de tf-idf de los chistes de pintamania, los 4 primeros chistes van de la fila 1 hasta la fila 21; en cambio, los 4 primeros chistes de 1000 chistes van de la fila 1 hasta la fila 60.
+
+```{r}
+pint_tf_idf %>%
+  slice(1:21) %>%
+  group_by(title) %>%
+  slice_max(tf_idf, n = 15) %>%
+  ungroup() %>%
+  ggplot(aes(tf_idf, fct_reorder(term, tf_idf), fill = title)) + geom_col(show.legend = FALSE) +
+  facet_wrap(~title, ncol = 2, scales = "free") +
+  labs(x = "tf-idf", y = NULL)
+```
+
+```{r}
+mil_tf_idf %>%
+  slice(1:60) %>%
+  group_by(title) %>%
+  slice_max(tf_idf, n = 15) %>%
+  ungroup() %>%
+  ggplot(aes(tf_idf, fct_reorder(term, tf_idf), fill = title)) + geom_col(show.legend = FALSE) +
+  facet_wrap(~title, ncol = 2, scales = "free") +
+  labs(x = "tf-idf", y = NULL)
+```
+
+# Document Term Matrix (DTM) entre las dos webs
+
+En el apartado anterior ya hemos realizado los dtm de cada conjunto de datos (`dt_pint` y `dt_mil`), pero hay que hacer unos pequeños ajustes para el último apartado.
+
+```{r}
+mil_dtm <- mil_tf_idf %>%
+  count(title, term) %>%
+  cast_dtm(title, term, n)
+mil_dtm
+
+pint_dtm <- pint_tf_idf %>%
+  count(title, term) %>%
+  cast_dtm(title, term, n)
+pint_dtm
+```
+
+# Latent Dirichlet allocation (LAD) topic models
+
+LDA es un método particularmente popular para ajustar un topic models. Con `mil_dtm` y `pint_dtm` podemos pasar un LDA topic models para cada data set. Seleccionaremos 10 topics al aplicar la función `LDA` (k = 10).
+
+```{r}
+pint_lda <- LDA(pint_dtm, k = 10, control = list(seed = 284))
+```
+
+```{r}
+mil_lda <- LDA(mil_dtm, k = 10, control = list(seed = 284))
+```
+
+Usamos la función `tidy` para sacar las probabilidad de cada palabra por cada tema, llamado también $\beta$, del modelo. 
+
+```{r}
+pint_topics <- tidy(pint_lda, matrix = "beta")
+pint_topics
+```
+
+```{r}
+mil_topics <- tidy(mil_lda, matrix = "beta")
+mil_topics
+```
+
+Podemos usar la función `top_n` del paquete `dplyr`, que está incluido en el conjunto de paquetes `tidyverse`, para los 10 términos más comunes dentro de cada tema. 
+
+```{r}
+pint_top_terms <- pint_topics %>% 
+  group_by(topic) %>% 
+  top_n(10, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta)
+
+pint_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>% 
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered()
+```
+
+```{r}
+mil_top_terms <- mil_topics %>% 
+  group_by(topic) %>% 
+  top_n(10, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta)
+
+mil_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>% 
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered()
+```
+
+Una vez visualizadas las palabras que tienen mayor $\beta$ en cada tema, veamos cómo podemos relacionar las palabras de cada chiste con las categorías. 
+
+Empezamos por clasificar cada palabra en un único tema. Cada palabra tiene un índice $\beta$ correspondiente a cada tema, asignaremos que una palabra está dentro del tema si tiene el valor $\beta$ más grande de todos.
+
+```{r}
+pint_topics_words <- pint_topics %>%
+  group_by(term) %>%
+  filter(beta == max(beta))
+
+pint_topics_words
+```
+
+```{r}
+mil_topics_words <- mil_topics %>%
+  group_by(term) %>%
+  filter(beta == max(beta))
+
+mil_topics_words
+```
+
+Para tener incluida la categoría, vamos a juntar ambas cosas con la función `merge`.
+
+```{r}
+pint_top_cat <- merge(pint_topics_words, pint_tf_idf, by = "term")
+
+mil_top_cat <- merge(mil_topics_words, mil_tf_idf, by = "term")
+```
+
+Veamos qué tipo de chistes predominan en ambos conjuntos. Cogeremos los 10 primeros.
+
+Empezamos por los chistes de pintamania.
+
+```{r}
+head(sort(table(pint_top_cat$categories), decreasing = TRUE), 10)
+```
+
+Seguimos con los chistes de 1000 chistes. 
+
+```{r}
+head(sort(table(mil_top_cat$categories), decreasing = TRUE), 10)
+```
+
+En este caso tenemos categorías cruzadas, pero nos quedamos con las categorías "cortos", "malos", "largos", "buenos", "internacionales", "matrimonios", "animales" y "verdes". 
+
+Lo siguiente que haremos será, para cada conjunto de datos, dos tablas de contingencia compuesta por los temas y las categorías seleccionadas. Empezamos por pintamania.
+
+```{r}
+variados <- pint_top_cat %>%
+  filter(grepl('Chistes variados', categories)) %>%
+  mutate(categories = "Chistes variados")
+
+jaimito <- pint_top_cat %>%
+  filter(grepl('Chistes de Jaimito', categories)) %>%
+  mutate(categories = "Chistes de Jaimito")
+
+mama <- pint_top_cat %>%
+  filter(grepl('Chistes de mamá mamá', categories)) %>%
+  mutate(categories = "Chistes de mamá mamá")
+
+animales <- pint_top_cat %>%
+  filter(grepl('Chistes de animales', categories)) %>%
+  mutate(categories = "Chistes de animales")
+
+amigos <- pint_top_cat %>%
+  filter(grepl('Chistes de amigos', categories)) %>%
+  mutate(categories = "Chistes de amigos")
+
+borrachos <- pint_top_cat %>%
+  filter(grepl('Chistes de borrachos', categories)) %>%
+  mutate(categories = "Chistes de borrachos")
+
+cortos <- pint_top_cat %>%
+  filter(grepl('Chistes cortos', categories)) %>%
+  mutate(categories = "Chistes cortos")
+
+informatica <- pint_top_cat %>%
+  filter(grepl('Chistes de informática', categories)) %>%
+  mutate(categories = "Chistes de informática")
+
+marineros <- pint_top_cat %>%
+  filter(grepl('Chistes de marineros', categories)) %>%
+  mutate(categories = "Chistes de marineros")
+
+deportes <- pint_top_cat %>%
+  filter(grepl('Chistes de deportes', categories)) %>%
+  mutate(categories = "Chistes de deportes")
+
+mat_conf_pint <- rbind(variados, jaimito, mama, animales, amigos, borrachos, cortos, informatica, 
+                       marineros, deportes) 
+table(mat_conf_pint$categories, mat_conf_pint$topic, dnn = c("CATEGORÍAS", "TEMAS"))
+```
+
+Con esta tabla podemos deducir de los chistes de pintamania:
+
+* Chistes de amigos contienen más palabras del tema 6.
+
+* Chistes de animales contienen más palabras del tema 1.
+
+* Chistes de Jaimito contienen más palabras del tema 7.
+
+* Chistes de mamá mamá contienen más palabras del tema 7.
+
+* Chistes variados contienen más palabras del tema 6.
+
+* Chistes de borrachos contienen más palabras del tema 6.
+
+* Chistes cortos contienen más palabras del tema 6.
+
+* Chistes de deportes contienen más palabras del tema 3.
+
+* Chistes de informática contienen más palabras del tema 8.
+
+* Chistes de marineros contienen más palabras del tema 1.
+
+
+Realizamos el mismo procedimiento pero con los chistes de 1000 chistes.
+
+```{r}
+cortos <- mil_top_cat %>%
+  filter(grepl('cortos', categories)) %>%
+  mutate(categories = "cortos")
+
+malos <- mil_top_cat %>%
+  filter(grepl('malos', categories)) %>%
+  mutate(categories = "malos")
+
+largos <- mil_top_cat %>%
+  filter(grepl('largos', categories)) %>%
+  mutate(categories = "largos")
+
+buenos <- mil_top_cat %>%
+  filter(grepl('buenos', categories)) %>%
+  mutate(categories = "buenos")
+
+internacionales <- mil_top_cat %>%
+  filter(grepl('internacionales', categories)) %>%
+  mutate(categories = "internacionales")
+
+matrimonios <- mil_top_cat %>%
+  filter(grepl('matrimonios', categories)) %>%
+  mutate(categories = "matrimonios")
+
+animales <- mil_top_cat %>%
+  filter(grepl('animales', categories)) %>%
+  mutate(categories = "animales")
+
+verdes <- mil_top_cat %>%
+  filter(grepl('verdes', categories)) %>%
+  mutate(categories = "verdes")
+
+mat_conf_mil <- rbind(buenos, cortos, largos, malos, internacionales, matrimonios, animales, verdes)
+table(mat_conf_mil$categories, mat_conf_mil$topic, dnn = c("CATEGORÍAS", "TEMAS"))
+```
+
+Con esta tabla podemos deducir de los chistes de 1000 chistes:
+
+* Chistes buenos contienen más palabras del tema 1.
+
+* Chistes cortos contienen más palabras del tema 3.
+
+* Chistes largos contienen más palabras del tema 1.
+
+* Chistes malos contienen más palabras del tema 3.
+
+* Chistes animales contienen más palabras del tema 10.
+
+* Chistes internacionales contienen más palabras del tema 8.
+
+* Chistes matrimonios contienen más palabras del tema 3.
+
+* Chistes verdes contienen más palabras del tema 9.
